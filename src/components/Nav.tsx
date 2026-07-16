@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings, ChevronRight,
   Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid,
-  ShieldCheck, HardDrive
+  ShieldCheck, HardDrive, MailPlus
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { roleAtLeast, type Role } from '@shared/auth'
@@ -137,7 +137,8 @@ export function Nav() {
         {/* System */}
         <Group title="System">
           <Item href="/settings" label="Einstellungen" icon={Settings} active={top('/settings')} />
-          {isAdmin && <Item href="/admin" label="Benutzer & Sicherheit" icon={ShieldCheck} active={top('/admin')} />}
+          {isAdmin && <Item href="/admin" label="Benutzer & Sicherheit" icon={ShieldCheck} active={path === '/admin'} />}
+          {isAdmin && <Item href="/admin/freigaben" label="E-Mail-Freigaben" icon={MailPlus} active={path.startsWith('/admin/freigaben')} indent />}
         </Group>
       </nav>
 

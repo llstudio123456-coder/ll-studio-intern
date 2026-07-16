@@ -1,10 +1,12 @@
 /* ─────────────────────────  Anmeldung & Zugriffsschutz — Typen  ───────────────────────── */
 
-export type Role = 'owner' | 'admin' | 'member' | 'viewer'
+export type Role = 'owner' | 'admin' | 'employee' | 'member' | 'guest' | 'viewer'
 export const ROLE_LABELS: Record<Role, string> = {
   owner: 'Inhaber',
   admin: 'Administrator',
-  member: 'Mitarbeiter',
+  employee: 'Mitarbeiter',
+  member: 'Mitglied',
+  guest: 'Gast',
   viewer: 'Nur Lesen'
 }
 
@@ -36,8 +38,11 @@ export interface AppUser {
   approvedAt?: string
 }
 
-/** Rangordnung der Rollen für „mindestens"-Prüfungen. */
-export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2, owner: 3 }
+/**
+ * Rangordnung der Rollen für „mindestens"-Prüfungen.
+ * Zentral definiert — jede serverseitige Prüfung leitet sich hieraus ab, nie aus sichtbaren Buttons.
+ */
+export const ROLE_RANK: Record<Role, number> = { viewer: 0, guest: 1, member: 2, employee: 3, admin: 4, owner: 5 }
 export function roleAtLeast(role: Role | undefined, min: Role): boolean {
   if (!role) return false
   return ROLE_RANK[role] >= ROLE_RANK[min]
@@ -70,18 +75,26 @@ export function canActOn(actor: { id: string; role: Role }, target: { id: string
   }
   // 2) Ohne Admin-Rang gar nichts.
   if (!roleAtLeast(actor.role, 'admin')) return false
-  // 3) An sich selbst ist nur „überall abmelden" erlaubt. Deaktivieren/Sperren/Löschen der eigenen
-  //    Person wäre eine Selbstaussperrung; die Rangregel unten darf hier nicht mehr greifen,
-  //    sonst könnte ein Admin nicht einmal die eigenen Sitzungen beenden.
+  // 3) An sich selbst ist nur „überall abmelden" erlaubt. Das verbietet zugleich jede
+  //    Selbst-Hochstufung: setRole auf die eigene Person ist damit strukturell ausgeschlossen,
+  //    egal was ein manipulierter Request behauptet.
   if (actor.id === target.id) return action === 'revokeSessions'
-  // 4) Ein Admin darf nicht an Gleichrangigen schrauben; ein Inhaber darf an Admins.
-  if (actor.role === 'admin' && ROLE_RANK[target.role] >= ROLE_RANK.admin) return false
+  // 4) Der Handelnde muss den Zielbenutzer ECHT überragen. Gleichrang genügt nicht — sonst
+  //    könnten sich zwei Administratoren gegenseitig absetzen.
+  if (ROLE_RANK[actor.role] <= ROLE_RANK[target.role]) return false
   return true
 }
 
-/** Rollen, die ein Handelnder vergeben darf. „owner" ist nie darunter — das steuert nur die Env. */
+/**
+ * Rollen, die ein Handelnder vergeben darf: ausschließlich Rollen UNTERHALB der eigenen.
+ * „owner" ist nie darunter — die Inhaber-Rolle steuert allein OWNER_EMAILS. Damit kann sich auch
+ * ein Administrator mit gekapertem Zugang nicht zum Inhaber machen.
+ */
 export function assignableRoles(actor: { role: Role }): Role[] {
-  if (actor.role === 'owner') return ['admin', 'member', 'viewer']
-  if (actor.role === 'admin') return ['member', 'viewer']
-  return []
+  if (!roleAtLeast(actor.role, 'admin')) return []
+  const below = (Object.keys(ROLE_RANK) as Role[]).filter((r) => r !== 'owner' && ROLE_RANK[r] < ROLE_RANK[actor.role])
+  return below.sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])
 }
+
+/** Niedrigste Rolle — Standard für neu freigegebene Adressen (Prinzip der geringsten Rechte). */
+export const DEFAULT_INVITE_ROLE: Role = 'guest'

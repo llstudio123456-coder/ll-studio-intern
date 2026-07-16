@@ -48,7 +48,7 @@ export function listUsers(): AppUser[] {
  * wurde oder dessen Zeile manipuliert wurde, ausgesperrt bleiben.
  * Wird ausschließlich aufgerufen, nachdem die Allowlist serverseitig bestätigt wurde.
  */
-export function upsertGoogleUser(p: { sub: string; email: string; emailVerified: boolean; name?: string; picture?: string }): AppUser {
+export function upsertGoogleUser(p: { sub: string; email: string; emailVerified: boolean; name?: string; picture?: string; initialRole?: Role }): AppUser {
   const db = getDb()
   const t = now()
   const existing = getUserByEmail(p.email)
@@ -63,7 +63,8 @@ export function upsertGoogleUser(p: { sub: string; email: string; emailVerified:
     return getUserById(existing.id)!
   }
   const id = randomUUID()
-  const role = initialRoleFor(p.email)
+  // Rolle aus der Freigabeliste, sonst der Env-Standard. Die Inhaber-Rolle setzt sich immer durch.
+  const role = enforcedRoleFor(p.email) ?? p.initialRole ?? initialRoleFor(p.email)
   db.prepare(
     `INSERT INTO app_users (id,google_sub,email,email_norm,email_verified,name,picture,role,status,token_version,created_at,last_login_at,last_activity_at,approved_by,approved_at)
      VALUES (?,?,?,?,?,?,?,?,'active',0,?,?,?,?,?)`

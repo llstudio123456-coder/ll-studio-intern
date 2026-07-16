@@ -16,6 +16,7 @@
     "test:auth": "node scripts/auth-tests.mjs",
     "test:admin": "node scripts/admin-tests.mjs",
     "test:workspace": "node scripts/workspace-tests.mjs",
+    "test:allowlist": "node scripts/allowlist-tests.mjs",
     "setup:dev-access-password": "node scripts/setup-dev-access-password.mjs"
   },
   "dependencies": {

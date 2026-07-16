@@ -22,8 +22,56 @@ export function getDb(): Database.Database {
   migrateV3(db)
   migrateAuth(db)
   migrateFiles(db)
+  migrateAllowlist(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (E-Mail-Freigabeliste): Wer sich überhaupt anmelden darf.
+ *
+ * `normalized_email` ist der eindeutige Schlüssel: Gmail ignoriert Punkte und alles ab „+“.
+ * Ohne diese Normalisierung könnte eine widerrufene Freigabe über eine Schreibvariante derselben
+ * Adresse umgangen werden.
+ */
+function migrateAllowlist(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS authorized_emails (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    normalized_email TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'invited',
+    default_role TEXT NOT NULL DEFAULT 'guest',
+    first_name TEXT,
+    last_name TEXT,
+    notes TEXT,
+    invited_by TEXT REFERENCES app_users(id),
+    invited_at TEXT NOT NULL,
+    approved_by TEXT REFERENCES app_users(id),
+    approved_at TEXT,
+    expires_at TEXT,
+    revoked_at TEXT,
+    revoked_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_authorized_emails ON authorized_emails(normalized_email);
+  CREATE INDEX IF NOT EXISTS ix_authorized_emails_status ON authorized_emails(status);
+  `)
+
+  // Einmalige Rollen-Migration: Vor der Einführung von 'guest'/'employee' hieß 'member' in der
+  // Oberfläche „Mitarbeiter". Wer damals 'member' war, muss 'employee' werden — sonst verlieren
+  // bestehende Benutzer still ihre Schreibrechte im Workspace.
+  //
+  // Die Markierung ist zwingend: Ohne sie würde ein später bewusst vergebenes 'member' (Mitglied)
+  // beim nächsten Serverstart erneut zu 'employee' hochgestuft — eine stille Rechteausweitung.
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, at TEXT NOT NULL);`)
+  const KEY = 'roles_member_to_employee_v1'
+  const done = db.prepare('SELECT 1 FROM schema_meta WHERE key = ?').get(KEY)
+  if (!done) {
+    const n = db.prepare("UPDATE app_users SET role = 'employee' WHERE role = 'member'").run().changes
+    db.prepare('INSERT INTO schema_meta (key,value,at) VALUES (?,?,?)').run(KEY, String(n), new Date().toISOString())
+  }
 }
 
 /**

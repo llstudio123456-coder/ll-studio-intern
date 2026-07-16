@@ -1,7 +1,8 @@
 import NextAuth from 'next-auth'
 import { authConfig } from '@/auth.config'
-import { isEmailAllowed } from '@/server/auth/config'
+import { isEmailAllowed, isOwnerEmail } from '@/server/auth/config'
 import { upsertGoogleUser, getUserByEmail, audit } from '@/server/auth/repo'
+import { decideAccess, ensureEntryForEnv, markSignedIn } from '@/server/auth/allowlistRepo'
 import { INACTIVE_STATUSES } from '@shared/auth'
 
 /**
@@ -15,23 +16,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ profile }) {
       const email = typeof profile?.email === 'string' ? profile.email : undefined
       const verified = (profile as { email_verified?: boolean } | undefined)?.email_verified === true
-      // Default-Deny: nur verifizierte, allowlisted E-Mail-Adressen.
-      if (!isEmailAllowed(email, verified)) {
-        audit('login_denied', { email, success: false, resource: 'signIn' })
+
+      // 1) Google muss die Adresse selbst bestätigt haben. Ein unbestätigtes Konto könnte eine
+      //    fremde Adresse behaupten und sich damit eine Freigabe erschleichen.
+      if (!email || !verified) {
+        audit('login_denied', { email, success: false, resource: 'signIn', meta: { reason: 'E-Mail nicht durch Google bestätigt' } })
         return false
       }
+
+      // 2) Autoritative Entscheidung aus der Freigabeliste (Default-Deny). Die Umgebung dient
+      //    nur noch als Notzugang für Inhaber und als Startpunkt, solange die Liste leer ist.
+      const decision = decideAccess(email, isEmailAllowed(email, verified), isOwnerEmail(email))
+      if (!decision.allowed) {
+        audit('login_denied', { email, success: false, resource: 'signIn', meta: { reason: decision.reason } })
+        return false
+      }
+
+      // 3) Erst jetzt entsteht ein interner Account. Wer nicht freigegeben ist, hinterlässt
+      //    keinen Benutzer — die bloße Existenz eines Google-Kontos genügt nie.
       const u = upsertGoogleUser({
         sub: String((profile as { sub?: string }).sub ?? ''),
-        email: email!,
+        email,
         emailVerified: verified,
         name: typeof profile?.name === 'string' ? profile.name : undefined,
-        picture: typeof (profile as { picture?: string }).picture === 'string' ? (profile as { picture?: string }).picture : undefined
+        picture: typeof (profile as { picture?: string }).picture === 'string' ? (profile as { picture?: string }).picture : undefined,
+        // Rolle beim ERSTEN Login aus der Freigabe. Bei Folge-Logins bleibt die in der
+        // Verwaltung gesetzte Rolle unangetastet (Ausnahme: Inhaber, siehe repo.ts).
+        initialRole: decision.role
       })
+
       if (INACTIVE_STATUSES.includes(u.status)) {
         audit('login_blocked', { userId: u.id, email: u.email, success: false, meta: { status: u.status } })
         return false
       }
-      audit('login_success', { userId: u.id, email: u.email })
+
+      // Liste und Wirklichkeit zusammenhalten: Env-Zugänge in die Liste aufnehmen,
+      // Eingeladene auf „aktiv" heben.
+      if (decision.reason.includes('OWNER_EMAILS')) ensureEntryForEnv(email, 'owner')
+      else if (decision.reason === 'ALLOWED_GOOGLE_EMAILS') ensureEntryForEnv(email, u.role)
+      markSignedIn(email)
+
+      audit('login_success', { userId: u.id, email: u.email, meta: { via: decision.reason } })
       return true
     },
     async jwt({ token, user, profile }) {
