@@ -107,10 +107,14 @@ Der Zugriff ist **doppelt** geschützt: Google-Login **und** ein interner Sicher
 
 1. `https://DEINE-URL/` öffnen → Weiterleitung auf `/login`
 2. **Mit Google anmelden** — nur E-Mails aus `ALLOWED_GOOGLE_EMAILS` / `ALLOWED_GOOGLE_DOMAIN` kommen durch; alle anderen landen auf `/access-denied`, ohne interne Daten zu sehen
-3. Danach Weiterleitung auf `/gate` → **Sicherheitscode einrichten**
-   - mindestens 10 Zeichen, Buchstaben **und** Zahlen
-   - schwache Codes (`123`, `password`, `admin`, …) werden **abgelehnt**
+3. Danach Weiterleitung auf `/gate`. Solange **kein** Passwort gesetzt ist, zeigt die Seite die **Ersteinrichtung** (`POST /api/auth/gate/setup`):
+   - mindestens **14** Zeichen, Buchstaben **und** Zahlen
+   - schwache Passwörter (`123`, `password`, `admin`, …) werden **abgelehnt**
    - wird nur als Argon2id-Hash gespeichert
+   - **nur ein `admin`** darf einrichten (`INITIAL_ADMIN_EMAILS`); ein Member sieht nur einen Hinweis
+   - die Route greift **ausschließlich**, solange nichts eingerichtet ist — danach 409. Ein Zurücksetzen läuft bewusst **nicht** über diesen Weg, sonst wäre die Sperre über die eigene Session aushebelbar
+
+> **Passwort vergessen?** Es gibt online absichtlich keinen Reset. Wiederherstellung nur über die Datenbank auf dem Volume (`security_access_password`), siehe Abschnitt 11.
 
 > **Production ist gegen Test-Codes gesperrt:** Ein lokal gesetzter Dev-Code (`isDevelopmentPassword`) wird in Production **hart verweigert** (`gate.ts` → `refuseInProd`). Das Passwort `123` kann online also nicht funktionieren.
 
@@ -169,3 +173,10 @@ TEST_AUTH_BASE=https://DEINE-URL npm run test:auth
 - **Kaltstart:** Chromium-Image ist groß; der erste Request nach dem Deploy dauert länger
 - **`npm run build` nie bei laufendem Dev-Server** — überschreibt `.next`, der Dev-Server liefert danach 500
 - **Backups:** SQLite liegt auf dem Volume; regelmäßig `$LLI_DATA_DIR` sichern (Hoster-Backup oder Kopie von `kundenfinder.db`)
+- **Zugangspasswort vergessen:** Es gibt online bewusst keinen Reset-Knopf (er wäre ein Angriffsweg). Wiederherstellung nur mit Zugriff auf das Volume — die Zeile in `security_access_password` (id = 1) zurücksetzen, danach bietet `/gate` dem Admin wieder die Ersteinrichtung an:
+  ```bash
+  railway ssh
+  # im Container:
+  node -e "const D=require('better-sqlite3');const db=new D('/data/kundenfinder.db');db.prepare(\"UPDATE security_access_password SET password_hash=NULL, is_active=0, gate_epoch=gate_epoch+1 WHERE id=1\").run();console.log('zurueckgesetzt')"
+  ```
+  `gate_epoch` wird erhöht, damit alle bestehenden Freigaben sofort ungültig werden.
