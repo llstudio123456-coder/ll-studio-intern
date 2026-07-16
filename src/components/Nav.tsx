@@ -5,9 +5,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings, ChevronRight,
-  Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid
+  Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid,
+  ShieldCheck
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { roleAtLeast, type Role } from '@shared/auth'
 import { Logo } from './Logo'
 import { cls } from '@/lib/format'
 
@@ -49,7 +51,10 @@ export function Nav() {
   useEffect(() => { loadCounts() }, [loadCounts, path, view])
   useEffect(() => { fetch('/api/auth/me').then((r) => r.json()).then(setMe).catch(() => {}) }, [])
 
-  const isAdmin = me?.user?.role === 'admin'
+  // roleAtLeast statt Gleichheit: Der Inhaber ist ranghöher als ein Admin und muss den
+  // Adminbereich ebenfalls sehen. Das Ausblenden ist reine Bequemlichkeit — die Prüfung
+  // sitzt serverseitig in guardAdmin und in der Middleware.
+  const isAdmin = roleAtLeast(me?.user?.role as Role | undefined, 'admin')
 
   // Top-Level-Link
   const Item = ({ href, label, icon: Icon, active, count, indent }: { href: string; label: string; icon: LucideIcon; active: boolean; count?: number; indent?: boolean }) => (
@@ -127,7 +132,7 @@ export function Nav() {
         {/* System */}
         <Group title="System">
           <Item href="/settings" label="Einstellungen" icon={Settings} active={top('/settings')} />
-          {isAdmin && <Item href="/settings" label="Benutzer & Sicherheit" icon={Users} active={false} />}
+          {isAdmin && <Item href="/admin" label="Benutzer & Sicherheit" icon={ShieldCheck} active={top('/admin')} />}
         </Group>
       </nav>
 

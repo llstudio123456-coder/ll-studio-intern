@@ -2,14 +2,16 @@ import NextAuth from 'next-auth'
 import { NextResponse } from 'next/server'
 import { authConfig } from '@/auth.config'
 import { authConfigured, isProd } from '@/server/auth/config'
-import { GATE_COOKIE, verifyGate } from '@/server/auth/gate-cookie'
+import { GATE_COOKIE, ADMIN_COOKIE, verifyGate, verifyAdmin } from '@/server/auth/gate-cookie'
+import { roleAtLeast, type Role } from '@shared/auth'
 
 // Edge-Instanz nur aus der edge-sicheren Basis-Konfig (kein DB/Node-Code).
 const { auth } = NextAuth(authConfig)
 
 const PUBLIC_PREFIXES = ['/login', '/access-denied', '/gate', '/api/auth']
+const isPrefix = (path: string, p: string) => path === p || path.startsWith(p + '/')
 function isPublic(path: string): boolean {
-  if (PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))) return true
+  if (PUBLIC_PREFIXES.some((p) => isPrefix(path, p))) return true
   if (path.startsWith('/_next') || path === '/favicon.ico' || path === '/robots.txt') return true
   return /\.(png|jpg|jpeg|gif|svg|ico|txt|webmanifest|woff2?)$/.test(path)
 }
@@ -40,8 +42,26 @@ export default auth(async (req) => {
   if (!payload || payload.uid !== session.user.id) return isApi ? json(403, 'Sicherheitsfreigabe erforderlich.') : toPage(req.url, '/gate', pathname)
 
   // Grobe Rollenprüfung für besonders sensible Seiten (zusätzlich autoritativ serverseitig).
-  if ((pathname === '/settings' || pathname.startsWith('/settings/')) && session.user.role !== 'admin') {
+  // roleAtLeast statt Gleichheit: Ein Inhaber ist ranghöher als ein Admin und muss überall
+  // hineinkommen, wo ein Admin hineinkommt.
+  const role = session.user.role as Role | undefined
+  if (isPrefix(pathname, '/settings') && !roleAtLeast(role, 'admin')) {
     return toPage(req.url, '/access-denied?reason=role')
+  }
+  // Der Adminbereich zusätzlich: ohne frische Admin-Bestätigung geht hier nichts weiter.
+  // Die Signatur wird hier edge-seitig geprüft, die Bindung an token_version/gate_epoch
+  // autoritativ in guardAdmin gegen die Datenbank.
+  if (isPrefix(pathname, '/admin') || isPrefix(pathname, '/api/admin')) {
+    if (!roleAtLeast(role, 'admin')) {
+      return isApi ? json(403, 'Keine Berechtigung.') : toPage(req.url, '/access-denied?reason=role')
+    }
+    // Die Bestätigungsroute selbst muss erreichbar bleiben — sonst kommt niemand je hinein.
+    if (pathname !== '/api/admin/step-up' && pathname !== '/admin/bestaetigen') {
+      const adm = await verifyAdmin(req.cookies.get(ADMIN_COOKIE)?.value)
+      if (!adm || adm.uid !== session.user.id) {
+        return isApi ? json(403, 'Admin-Bestätigung erforderlich.') : toPage(req.url, '/admin/bestaetigen', pathname)
+      }
+    }
   }
 
   return NextResponse.next()

@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto'
 import type { AppUser, Role, UserStatus } from '@shared/auth'
+import { INACTIVE_STATUSES, isProtectedOwner } from '@shared/auth'
 import { getDb } from '../services/kundenfinder/db'
-import { initialRoleFor } from './config'
+import { initialRoleFor, enforcedRoleFor } from './config'
 
 const now = () => new Date().toISOString()
 const norm = (e: string) => e.trim().toLowerCase()
@@ -41,7 +42,10 @@ export function listUsers(): AppUser[] {
 
 /**
  * Legt einen freigegebenen Google-Benutzer beim ersten Login an oder aktualisiert Profil/Login.
- * Rolle/Status werden bei Folge-Logins NICHT überschrieben (Admin-Entscheidungen bleiben erhalten).
+ * Rolle/Status werden bei Folge-Logins NICHT überschrieben (Admin-Entscheidungen bleiben erhalten) —
+ * mit einer Ausnahme: Die Inhaber-Rolle aus OWNER_EMAILS wird bei jedem Login autoritativ erzwungen
+ * und der Inhaber wieder aktiv gesetzt. Sonst könnte ein Inhaber, der früher als member angelegt
+ * wurde oder dessen Zeile manipuliert wurde, ausgesperrt bleiben.
  * Wird ausschließlich aufgerufen, nachdem die Allowlist serverseitig bestätigt wurde.
  */
 export function upsertGoogleUser(p: { sub: string; email: string; emailVerified: boolean; name?: string; picture?: string }): AppUser {
@@ -51,6 +55,11 @@ export function upsertGoogleUser(p: { sub: string; email: string; emailVerified:
   if (existing) {
     db.prepare('UPDATE app_users SET google_sub=?, name=COALESCE(?,name), picture=?, email_verified=?, last_login_at=?, last_activity_at=? WHERE id=?')
       .run(p.sub, p.name || null, p.picture || null, p.emailVerified ? 1 : 0, t, t, existing.id)
+    const enforced = enforcedRoleFor(p.email)
+    if (enforced && (existing.role !== enforced || INACTIVE_STATUSES.includes(existing.status))) {
+      db.prepare("UPDATE app_users SET role=?, status='active' WHERE id=?").run(enforced, existing.id)
+      audit('owner_role_enforced', { userId: existing.id, email: existing.email, meta: { from: existing.role, fromStatus: existing.status } })
+    }
     return getUserById(existing.id)!
   }
   const id = randomUUID()
@@ -62,16 +71,39 @@ export function upsertGoogleUser(p: { sub: string; email: string; emailVerified:
   return getUserById(id)!
 }
 
+/**
+ * Letzte Verteidigungslinie für den Inhaber: greift auch dann, wenn eine Route die
+ * canActOn-Prüfung vergisst. Wirft bewusst laut, statt still zu schlucken — ein Aufruf hier
+ * ist immer ein Programmierfehler.
+ */
+function refuseIfOwner(id: string, what: string): AppUser | null {
+  const target = getUserById(id)
+  if (!target) return null
+  if (isProtectedOwner(target)) throw new Error(`Inhaber ist geschützt: ${what} nicht möglich.`)
+  return target
+}
+
 export function setUserStatus(id: string, status: UserStatus, by: string): AppUser | null {
+  if (!refuseIfOwner(id, 'Statusänderung')) return null
   const db = getDb()
   db.prepare('UPDATE app_users SET status=? WHERE id=?').run(status, id)
   // Sperren/Deaktivieren/Widerruf beendet sofort alle bestehenden Sessions.
-  if (status === 'blocked' || status === 'deactivated' || status === 'revoked') bumpTokenVersion(id)
+  if (INACTIVE_STATUSES.includes(status)) bumpTokenVersion(id)
+  audit('user_status_changed', { userId: id, resource: by, meta: { status } })
   return getUserById(id)
 }
 export function setUserRole(id: string, role: Role): AppUser | null {
+  if (!refuseIfOwner(id, 'Rollenänderung')) return null
+  // Die Inhaber-Rolle wird ausschließlich über OWNER_EMAILS vergeben, nie über die Oberfläche.
+  if (role === 'owner') throw new Error('Die Inhaber-Rolle kann nur über OWNER_EMAILS vergeben werden.')
   getDb().prepare('UPDATE app_users SET role=? WHERE id=?').run(role, id)
   return getUserById(id)
+}
+/** Endgültiges Löschen. Der Inhaber ist ausgenommen. */
+export function deleteUser(id: string): boolean {
+  if (!refuseIfOwner(id, 'Löschen')) return false
+  getDb().prepare('DELETE FROM app_users WHERE id=?').run(id)
+  return true
 }
 /** Erhöht die Token-Version → alle bestehenden Sessions des Benutzers werden ungültig. */
 export function bumpTokenVersion(id: string): void {

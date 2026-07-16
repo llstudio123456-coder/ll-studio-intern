@@ -28,6 +28,18 @@ export function allowedDomain(): string {
 export function initialAdminEmails(): string[] {
   return parseList(process.env.INITIAL_ADMIN_EMAILS)
 }
+/**
+ * Inhaber-Konten. Bewusst NUR über die Umgebung steuerbar: Die Oberfläche kann die Inhaber-Rolle
+ * weder vergeben noch entziehen, damit sich niemand über einen kompromittierten Admin-Zugang
+ * selbst zum Inhaber macht oder den Inhaber aussperrt.
+ */
+export function ownerEmails(): string[] {
+  return parseList(process.env.OWNER_EMAILS)
+}
+export function isOwnerEmail(email?: string): boolean {
+  if (!email) return false
+  return ownerEmails().includes(email.trim().toLowerCase())
+}
 
 /**
  * Serverseitige, geschlossene Zugriffsprüfung (Default-Deny).
@@ -45,13 +57,29 @@ export function isEmailAllowed(email?: string, emailVerified?: boolean): boolean
   return false
 }
 
-/** Erst-Rolle beim ersten Login: admin nur, wenn E-Mail in INITIAL_ADMIN_EMAILS. */
+/** Erst-Rolle beim ersten Login: owner vor admin, sonst member. */
 export function initialRoleFor(email: string): Role {
-  return initialAdminEmails().includes(email.trim().toLowerCase()) ? 'admin' : 'member'
+  const e = email.trim().toLowerCase()
+  if (ownerEmails().includes(e)) return 'owner'
+  return initialAdminEmails().includes(e) ? 'admin' : 'member'
+}
+
+/**
+ * Rolle, die bei JEDEM Login autoritativ aus der Umgebung erzwungen wird (sonst null).
+ * Nötig, damit ein Inhaber-Konto auch dann Inhaber ist, wenn es früher als member/admin
+ * angelegt wurde — und damit eine in der DB manipulierte Inhaber-Rolle wieder verschwindet.
+ */
+export function enforcedRoleFor(email: string): Role | null {
+  return isOwnerEmail(email) ? 'owner' : null
 }
 
 /** Session-Laufzeiten (Sekunden) – konfigurierbare Ausgangswerte. */
 export const SESSION = {
   idleTimeout: 30 * 60, // 30 min Inaktivität
   maxAge: 8 * 60 * 60 // 8 h absolute Laufzeit
+}
+
+/** Zusätzliche Admin-Freigabe für /admin: nach dieser Zeit ohne Aktivität erneut bestätigen. */
+export const ADMIN_STEP_UP = {
+  maxAge: 30 * 60 // 30 min
 }
