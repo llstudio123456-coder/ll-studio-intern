@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { Eye, EyeOff, ShieldCheck, RefreshCw } from 'lucide-react'
@@ -22,6 +22,7 @@ function GateInner() {
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/auth/me').then((r) => r.json()).then((d) => {
@@ -35,6 +36,7 @@ function GateInner() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (busy) return // Doppelklick / Enter-Spam: keine zweite parallele Anfrage
     if (setupMode && pw !== pw2) { setError('Die beiden Passwörter stimmen nicht überein.'); return }
     setBusy(true); setError('')
     try {
@@ -43,17 +45,29 @@ function GateInner() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ password: pw })
       })
-      if (r.ok) { router.replace(safeFrom(params.get('from'))); return }
-      // Bei der Vergabe die konkrete Regel zeigen; bei der Eingabe bewusst neutral bleiben.
-      if (setupMode) {
-        const d = await r.json().catch(() => null)
-        setError(d?.error || 'Die Einrichtung war nicht erfolgreich.')
-      } else {
-        setError('Die Sicherheitsfreigabe war nicht erfolgreich.')
+      const d = (await r.json().catch(() => null)) as { success?: boolean; error?: string } | null
+
+      if (r.ok && d?.success !== false) {
+        // Siehe /admin/bestaetigen: Ohne router.refresh() träfe die Navigation den Client Router
+        // Cache, der die Weiterleitung hierher aus einem Prefetch gespeichert hat. Die Middleware
+        // sähe das frisch gesetzte Gate-Cookie dann nie und schickte uns zurück — der Grund,
+        // warum vorher mehrfache Eingaben und ein manueller Reload nötig waren.
+        router.refresh()
+        router.replace(safeFrom(params.get('from')))
+        return // busy bleibt an, bis die Seite verschwindet
       }
+
+      // Bei der Vergabe die konkrete Regel zeigen; bei der Eingabe bewusst neutral bleiben
+      // (sonst verrät die Meldung, ob ein Passwort existiert).
+      setError(setupMode ? d?.error || 'Die Einrichtung war nicht erfolgreich.' : 'Die Sicherheitsfreigabe war nicht erfolgreich.')
+      if (!setupMode) setPw('') // Falsche Eingabe nicht stehen lassen
+      inputRef.current?.focus()
+      setBusy(false)
     } catch {
-      setError(setupMode ? 'Die Einrichtung war nicht erfolgreich.' : 'Die Sicherheitsfreigabe war nicht erfolgreich.')
-    } finally { setBusy(false) }
+      setError('Die Anmeldung konnte gerade nicht abgeschlossen werden. Bitte versuche es erneut.')
+      inputRef.current?.focus()
+      setBusy(false)
+    }
   }
 
   // Einrichtung ist fällig, aber dieses Konto ist kein Admin → kein Formular, sondern klare Ansage.
@@ -84,12 +98,14 @@ function GateInner() {
           <span className="mb-1 block text-xs font-medium text-[var(--color-muted)]">{setupMode ? 'Neues Zugangspasswort' : 'Zugangspasswort'}</span>
           <div className="relative">
             <input
+              ref={inputRef}
               type={show ? 'text' : 'password'}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
+              disabled={busy}
               autoComplete={setupMode ? 'new-password' : 'current-password'}
               autoFocus
-              className="inp pr-10"
+              className="inp pr-10 disabled:opacity-60"
               aria-label="Internes Zugangspasswort"
             />
             <button type="button" onClick={() => setShow((s) => !s)} className="absolute top-1/2 right-2 -translate-y-1/2 text-[var(--color-muted)]" aria-label={show ? 'Verbergen' : 'Anzeigen'}>
@@ -110,9 +126,10 @@ function GateInner() {
             />
           </label>
         )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
         <button type="submit" disabled={busy || !pw || (setupMode && !pw2)} className="btn-ink flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium">
-          {busy ? <RefreshCw size={15} className="animate-spin" /> : <ShieldCheck size={15} />} {setupMode ? 'Passwort festlegen' : 'Tool freigeben'}
+          {busy ? <RefreshCw size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+          {busy ? 'Anmeldung wird geprüft …' : setupMode ? 'Passwort festlegen' : 'Tool freigeben'}
         </button>
       </form>
       <AccountRow email={me?.user?.email} />

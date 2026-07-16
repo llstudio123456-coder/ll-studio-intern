@@ -13,17 +13,17 @@ export const dynamic = 'force-dynamic'
 
 /** Zweite Sicherheitsfreigabe: prüft das interne Zugangspasswort und setzt das signierte Gate-Cookie. */
 export async function POST(req: Request) {
-  if (!authConfigured()) return Response.json({ ok: false, error: 'Anmeldung nicht konfiguriert.' }, { status: 400 })
+  if (!authConfigured()) return Response.json({ success: false, ok: false, error: 'Anmeldung nicht konfiguriert.' }, { status: 400 })
   const session = await auth()
   const uid = session?.user?.id
-  if (!uid) return Response.json({ ok: false, error: 'Nicht angemeldet.' }, { status: 401 })
+  if (!uid) return Response.json({ success: false, ok: false, error: 'Nicht angemeldet.' }, { status: 401 })
   const user = getUserById(uid)
-  if (!user || INACTIVE_STATUSES.includes(user.status)) return Response.json({ ok: false, error: 'Kein Zugriff.' }, { status: 401 })
+  if (!user || INACTIVE_STATUSES.includes(user.status)) return Response.json({ success: false, ok: false, error: 'Kein Zugriff.' }, { status: 401 })
 
   const gs = gateStatus()
   if (gs.refuseInProd) {
     audit('gate_refused_prod', { userId: user.id, email: user.email, success: false })
-    return Response.json({ ok: false, error: 'Sicherheitseinrichtung erforderlich.' }, { status: 503 })
+    return Response.json({ success: false, ok: false, error: 'Sicherheitseinrichtung erforderlich.' }, { status: 503 })
   }
 
   // Rate-Limit je Benutzer + IP: max. 5 Versuche / 15 min.
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   const rl = rateLimit(key, 5, 15 * 60 * 1000)
   if (!rl.allowed) {
     audit('gate_ratelimited', { userId: user.id, email: user.email, success: false })
-    return Response.json({ ok: false, error: 'Die Sicherheitsfreigabe war nicht erfolgreich.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } })
+    return Response.json({ success: false, ok: false, error: 'Die Sicherheitsfreigabe war nicht erfolgreich.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } })
   }
 
   let password = ''
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   if (!ok) {
     audit('gate_failed', { userId: user.id, email: user.email, success: false })
     // Bewusst neutrale Meldung (kein Informationsleck).
-    return Response.json({ ok: false, error: 'Die Sicherheitsfreigabe war nicht erfolgreich.' }, { status: 403 })
+    return Response.json({ success: false, ok: false, error: 'Die Sicherheitsfreigabe war nicht erfolgreich.' }, { status: 403 })
   }
 
   rateReset(key)

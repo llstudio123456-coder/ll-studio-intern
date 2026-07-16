@@ -60,6 +60,10 @@ export function Nav() {
   const Item = ({ href, label, icon: Icon, active, count, indent }: { href: string; label: string; icon: LucideIcon; active: boolean; count?: number; indent?: boolean }) => (
     <Link
       href={href}
+      // Kein Prefetch: Jede Seite hier ist geschützt. Ein Prefetch VOR der Freigabe bekommt von
+      // der Middleware nur eine Weiterleitung zur Passwortseite — und genau die landete im
+      // Client Router Cache und ließ den Login „nicht reagieren", bis manuell neu geladen wurde.
+      prefetch={false}
       aria-current={active ? 'page' : undefined}
       className={cls(
         'group relative flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition-colors',

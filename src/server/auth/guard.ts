@@ -9,7 +9,9 @@ import { GATE_COOKIE, ADMIN_COOKIE, verifyGate, verifyAdmin } from './gate-cooki
 
 export type GuardResult = { ok: true; user: AppUser | null } | { ok: false; response: Response }
 
-const deny = (status: number, error: string) => Response.json({ ok: false, error }, { status })
+// `success` gehört mit in jede Antwort: Die Login-Oberfläche unterscheidet Erfolg und Fehler
+// ausschließlich daran und darf nicht am Statuscode raten müssen.
+const deny = (status: number, error: string) => Response.json({ success: false, ok: false, error }, { status })
 
 /**
  * Autoritative serverseitige Zugriffsprüfung für API-Routen (Node).

@@ -18,28 +18,28 @@ export const dynamic = 'force-dynamic'
  * läuft bewusst nicht über diesen Weg, sonst wäre die Sperre über die eigene Session aushebelbar.
  */
 export async function POST(req: Request) {
-  if (!authConfigured()) return Response.json({ ok: false, error: 'Anmeldung nicht konfiguriert.' }, { status: 400 })
+  if (!authConfigured()) return Response.json({ success: false, ok: false, error: 'Anmeldung nicht konfiguriert.' }, { status: 400 })
 
   const session = await auth()
   const uid = session?.user?.id
-  if (!uid) return Response.json({ ok: false, error: 'Nicht angemeldet.' }, { status: 401 })
+  if (!uid) return Response.json({ success: false, ok: false, error: 'Nicht angemeldet.' }, { status: 401 })
   const user = getUserById(uid)
-  if (!user || INACTIVE_STATUSES.includes(user.status)) return Response.json({ ok: false, error: 'Kein Zugriff.' }, { status: 401 })
+  if (!user || INACTIVE_STATUSES.includes(user.status)) return Response.json({ success: false, ok: false, error: 'Kein Zugriff.' }, { status: 401 })
 
   const gs = gateStatus()
   if (!gs.needsSetup) {
     audit('gate_setup_already_done', { userId: user.id, email: user.email, success: false })
-    return Response.json({ ok: false, error: 'Die Sicherheitsfreigabe ist bereits eingerichtet.' }, { status: 409 })
+    return Response.json({ success: false, ok: false, error: 'Die Sicherheitsfreigabe ist bereits eingerichtet.' }, { status: 409 })
   }
   if (!roleAtLeast(user.role, 'admin')) {
     audit('gate_setup_forbidden', { userId: user.id, email: user.email, success: false })
-    return Response.json({ ok: false, error: 'Nur ein Administrator kann die Sicherheitsfreigabe einrichten.' }, { status: 403 })
+    return Response.json({ success: false, ok: false, error: 'Nur ein Administrator kann die Sicherheitsfreigabe einrichten.' }, { status: 403 })
   }
 
   const rl = rateLimit(`gate-setup:${user.id}:${clientKey(req)}`, 5, 15 * 60 * 1000)
   if (!rl.allowed) {
     audit('gate_setup_ratelimited', { userId: user.id, email: user.email, success: false })
-    return Response.json({ ok: false, error: 'Zu viele Versuche. Bitte später erneut versuchen.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } })
+    return Response.json({ success: false, ok: false, error: 'Zu viele Versuche. Bitte später erneut versuchen.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } })
   }
 
   let password = ''
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     /* ignore */
   }
   const problem = passwordProblem(password)
-  if (problem) return Response.json({ ok: false, error: problem }, { status: 400 })
+  if (problem) return Response.json({ success: false, ok: false, error: problem }, { status: 400 })
 
   setGatePassword(await hashPassword(password), { isDev: false, changedBy: user.id })
 

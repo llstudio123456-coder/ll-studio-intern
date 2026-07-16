@@ -17,10 +17,20 @@ function isPublic(path: string): boolean {
 }
 
 const json = (status: number, error: string) => NextResponse.json({ ok: false, error }, { status })
+
+/** Seiten, die nach erfolgreicher Eingabe zur ursprünglich angeforderten Seite zurückführen. */
+const RETURNING_PAGES = ['/login', '/gate', '/admin/bestaetigen']
+
 function toPage(reqUrl: string, to: string, from?: string) {
   const u = new URL(to, reqUrl)
-  if (from && (to === '/login' || to === '/gate')) u.searchParams.set('from', from)
-  return NextResponse.redirect(u)
+  // Ohne /admin/bestaetigen in dieser Liste ging das Ziel verloren: Wer /admin/freigaben aufrief,
+  // landete nach der Bestätigung immer auf /admin statt auf der gewünschten Seite.
+  if (from && RETURNING_PAGES.includes(to)) u.searchParams.set('from', from)
+  const res = NextResponse.redirect(u)
+  // Auth-Weiterleitungen hängen vom Cookie-Zustand ab und dürfen NIE zwischengespeichert werden —
+  // weder vom Browser noch vom Router. Sonst gilt „nicht angemeldet" nach dem Login weiter.
+  res.headers.set('Cache-Control', 'no-store, must-revalidate')
+  return res
 }
 
 export default auth(async (req) => {
