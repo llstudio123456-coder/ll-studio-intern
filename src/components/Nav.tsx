@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings, ChevronRight,
   Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid,
-  ShieldCheck
+  ShieldCheck, HardDrive
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { roleAtLeast, type Role } from '@shared/auth'
@@ -127,6 +127,11 @@ export function Nav() {
         {/* Werkzeuge */}
         <Group title="Werkzeuge">
           <Item href="/prompt-generator" label="Prompt-Generator" icon={Wand2} active={top('/prompt-generator')} />
+        </Group>
+
+        {/* Workspace */}
+        <Group title="Workspace">
+          <Item href="/workspace" label="Dateien" icon={HardDrive} active={top('/workspace')} />
         </Group>
 
         {/* System */}

@@ -21,8 +21,75 @@ export function getDb(): Database.Database {
   migrateV2(db)
   migrateV3(db)
   migrateAuth(db)
+  migrateFiles(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Workspace-Dateien): Ordner, Dateien, Versionen, Papierkorb.
+ *
+ * Wichtig: `storage_key` ist eine serverseitig erzeugte UUID, NIE ein vom Benutzer gelieferter
+ * Pfad oder Name. Dadurch ist Path-Traversal strukturell ausgeschlossen — der Originalname lebt
+ * ausschließlich als Datenfeld in `name`.
+ */
+function migrateFiles(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    name_norm TEXT NOT NULL,
+    created_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES app_users(id)
+  );
+  -- Innerhalb eines Ordners darf ein Name nur einmal vorkommen (gelöschte ausgenommen).
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_folders_sibling
+    ON folders(IFNULL(parent_id,''), name_norm) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS ix_folders_parent ON folders(parent_id);
+
+  CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    folder_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    name_norm TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    -- serverseitige UUID; der Ablageort auf der Platte leitet sich NUR hieraus ab
+    storage_key TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    sha256 TEXT,
+    created_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    updated_by TEXT REFERENCES app_users(id),
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES app_users(id)
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_files_sibling
+    ON files(IFNULL(folder_id,''), name_norm) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS ix_files_folder ON files(folder_id);
+  CREATE INDEX IF NOT EXISTS ix_files_deleted ON files(deleted_at);
+
+  -- Jede Version bleibt als eigene Datei auf der Platte erhalten. Wiederherstellen erzeugt eine
+  -- NEUE Version aus einer alten, überschreibt die Historie also nicht.
+  CREATE TABLE IF NOT EXISTS file_versions (
+    id TEXT PRIMARY KEY,
+    file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    storage_key TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    mime TEXT NOT NULL,
+    sha256 TEXT,
+    comment TEXT,
+    created_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_file_versions ON file_versions(file_id, version);
+  CREATE INDEX IF NOT EXISTS ix_file_versions_file ON file_versions(file_id);
+  `)
 }
 
 /**
