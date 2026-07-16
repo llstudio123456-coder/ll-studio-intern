@@ -18,6 +18,7 @@
     "test:workspace": "node scripts/workspace-tests.mjs",
     "test:allowlist": "node scripts/allowlist-tests.mjs",
     "test:login": "node scripts/login-tests.mjs",
+    "test:notes": "node scripts/notes-tests.mjs",
     "setup:dev-access-password": "node scripts/setup-dev-access-password.mjs"
   },
   "dependencies": {

@@ -23,8 +23,59 @@ export function getDb(): Database.Database {
   migrateAuth(db)
   migrateFiles(db)
   migrateAllowlist(db)
+  migrateNotes(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Notizen).
+ *
+ * `visibility` entscheidet, wer lesen darf — geprüft wird das AUSSCHLIESSLICH serverseitig
+ * (notesRepo.canRead). „private" bedeutet dabei wirklich privat: auch Administratoren und der
+ * Inhaber sehen solche Notizen nicht. Das ist bewusst so und darf nicht aufgeweicht werden.
+ *
+ * `company_id` verbindet Notizen mit dem bestehenden Kundenfinder — Notizen sind damit kein
+ * getrenntes Modul, sondern hängen an echten Kunden.
+ */
+function migrateNotes(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_notes (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'persoenlich',
+    title TEXT,
+    body TEXT NOT NULL DEFAULT '',
+    visibility TEXT NOT NULL DEFAULT 'private',
+    owner_id TEXT REFERENCES app_users(id),
+    company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+    tags TEXT,
+    color TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    favorite INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    remind_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT REFERENCES app_users(id),
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES app_users(id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_notes_owner ON workspace_notes(owner_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_notes_company ON workspace_notes(company_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_notes_visibility ON workspace_notes(visibility);
+  CREATE INDEX IF NOT EXISTS ix_workspace_notes_deleted ON workspace_notes(deleted_at);
+  CREATE INDEX IF NOT EXISTS ix_workspace_notes_updated ON workspace_notes(updated_at DESC);
+
+  -- Gezielte Freigabe an einzelne Personen (visibility = 'shared').
+  CREATE TABLE IF NOT EXISTS workspace_note_shares (
+    note_id TEXT NOT NULL REFERENCES workspace_notes(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    can_edit INTEGER NOT NULL DEFAULT 0,
+    shared_at TEXT NOT NULL,
+    PRIMARY KEY (note_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_note_shares_user ON workspace_note_shares(user_id);
+  `)
 }
 
 /**

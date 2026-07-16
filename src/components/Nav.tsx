@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings, ChevronRight,
   Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid,
-  ShieldCheck, HardDrive, MailPlus
+  ShieldCheck, HardDrive, MailPlus, StickyNote
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { roleAtLeast, type Role } from '@shared/auth'
@@ -135,7 +135,8 @@ export function Nav() {
 
         {/* Workspace */}
         <Group title="Workspace">
-          <Item href="/workspace" label="Dateien" icon={HardDrive} active={top('/workspace')} />
+          <Item href="/workspace" label="Dateien" icon={HardDrive} active={path === '/workspace'} />
+          <Item href="/workspace/notizen" label="Notizen" icon={StickyNote} active={path.startsWith('/workspace/notizen')} />
         </Group>
 
         {/* System */}
