@@ -1,0 +1,46 @@
+# Render-Blueprint für den LL Studio Inspector.
+# Import: Render → New → Blueprint → Repo wählen. Secrets werden NICHT hier,
+# sondern im Render-Dashboard gesetzt (sync: false = Wert im Dashboard eintragen).
+services:
+  - type: web
+    name: ll-studio-inspector
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: frankfurt
+    # Hinweis: Persistente Disks brauchen einen bezahlten Plan (Starter).
+    # Ohne Disk gehen Kunden, Pipeline und Reports bei jedem Deploy verloren.
+    plan: starter
+    # /login ist der einzige öffentliche 200er-Endpunkt (alles andere ist geschützt).
+    healthCheckPath: /login
+    disk:
+      name: ll-data
+      mountPath: /data
+      sizeGB: 2
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Alle Speicher (SQLite + JSON) schreiben hierhin → muss auf die Disk zeigen
+      - key: LLI_DATA_DIR
+        value: /data
+      # Auth.js läuft hinter dem Render-Proxy → Host-Header vertrauen
+      - key: AUTH_TRUST_HOST
+        value: "true"
+      # ── Secrets: im Render-Dashboard eintragen, niemals ins Repo ──
+      - key: AUTH_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ALLOWED_GOOGLE_EMAILS
+        sync: false
+      - key: INITIAL_ADMIN_EMAILS
+        sync: false
+      # Optional: ganze Google-Workspace-Domain freigeben (statt Einzel-Mails)
+      - key: ALLOWED_GOOGLE_DOMAIN
+        sync: false
+      # Optional: KI-Vorschau
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false

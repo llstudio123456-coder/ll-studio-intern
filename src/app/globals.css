@@ -1,0 +1,408 @@
+@import 'tailwindcss';
+
+/*
+ * LL Studio Inspector (Web) — Design System v2
+ * Premium, ruhig, agentur-SaaS. Palette: Paper / Ink / Gold + systematische Status-Töne.
+ * Alle Farben als Tokens (CSS-Variablen) – keine verstreuten Hex-Werte.
+ */
+
+@theme inline {
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-hover: var(--hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+}
+
+:root {
+  --paper: #faf8f4;
+  --paper-2: #f2eee7;
+  --surface: #ffffff;
+  --surface-2: #fbf9f5;
+  --ink: #1c1b18;
+  --ink-soft: #45443f;
+  --muted: #86837c;
+  --gold: #a5834e;
+  --gold-soft: #eadfcc;
+  --line: #e7e1d6;
+  --line-strong: #d8d1c3;
+  --hover: rgba(28, 27, 24, 0.035);
+  --ring: rgba(165, 131, 78, 0.35);
+  --success: #2f7d4f;
+  --success-soft: #e4f0e8;
+  --warning: #9a5b12;
+  --warning-soft: #f6ead6;
+  --error: #b4372a;
+  --error-soft: #f7e3df;
+  --info: #3a6079;
+  --info-soft: #e4edf3;
+  --shadow-sm: 0 1px 2px rgba(28, 27, 24, 0.04), 0 1px 3px rgba(28, 27, 24, 0.03);
+  --shadow-md: 0 4px 14px rgba(28, 27, 24, 0.06), 0 2px 6px rgba(28, 27, 24, 0.04);
+  --shadow-lg: 0 18px 50px rgba(28, 27, 24, 0.14);
+}
+
+.dark {
+  --paper: #15151a;
+  --paper-2: #1c1c22;
+  --surface: #1f1f26;
+  --surface-2: #24242c;
+  --ink: #f4f1ea;
+  --ink-soft: #d4d0c6;
+  --muted: #97938a;
+  --gold: #c79b62;
+  --gold-soft: #3a3320;
+  --line: #2c2c33;
+  --line-strong: #3a3a42;
+  --hover: rgba(255, 255, 255, 0.045);
+  --ring: rgba(199, 155, 98, 0.4);
+  --success-soft: #16281d;
+  --warning-soft: #2c2113;
+  --error-soft: #2c1815;
+  --info-soft: #16232c;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--color-ink);
+  }
+  a {
+    color: inherit;
+  }
+  ::selection {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 8px;
+    border: 2px solid var(--paper);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font-family: inherit;
+  }
+  /* Sichtbarer, hochwertiger Fokusring – nur bei Tastaturnavigation */
+  :focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* ─────────────────────────  Flächen / Karten  ───────────────────────── */
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+@utility card-flat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+}
+.card-hover {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-line-strong);
+}
+
+/* Sanfte, systematische Trennlinie */
+.hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+/* ─────────────────────────  Buttons  ───────────────────────── */
+@utility btn-ink {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 500;
+  border: 1px solid var(--color-ink);
+  transition: background 0.18s ease, transform 0.08s ease, opacity 0.18s ease;
+}
+.btn-ink:hover {
+  background: #302e29;
+}
+.btn-ink:active {
+  transform: translateY(1px);
+}
+.btn-ink:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@utility btn-ghost {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-weight: 500;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.btn-ghost:hover {
+  background: var(--color-paper-2);
+  border-color: var(--color-line-strong);
+}
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Zusätzliche Varianten (additiv) */
+.btn-gold {
+  background: var(--color-gold);
+  color: #fff;
+  border: 1px solid var(--color-gold);
+  font-weight: 500;
+  transition: filter 0.18s ease, transform 0.08s ease;
+}
+.btn-gold:hover {
+  filter: brightness(1.06);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--color-error);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, var(--color-line));
+  font-weight: 500;
+  transition: background 0.18s ease;
+}
+.btn-danger:hover {
+  background: var(--error-soft);
+}
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--color-ink-soft);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.btn-icon:hover {
+  background: var(--color-paper-2);
+  color: var(--color-ink);
+}
+
+/* ─────────────────────────  Chips (Presets)  ───────────────────────── */
+@utility chip {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--color-gold);
+  background: var(--color-paper-2);
+}
+@utility chip-active {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+/* ─────────────────────────  Formulare  ───────────────────────── */
+.inp {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: 0.6rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  padding: 0 0.75rem;
+  font-size: 14px;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+textarea.inp {
+  height: auto;
+  padding: 0.55rem 0.75rem;
+  line-height: 1.55;
+}
+.inp:hover {
+  border-color: var(--color-line-strong);
+}
+.inp:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.inp::placeholder {
+  color: var(--color-muted);
+}
+.inp:disabled {
+  background: var(--color-paper-2);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+select.inp {
+  cursor: pointer;
+}
+label {
+  color: var(--color-ink-soft);
+}
+
+/* ─────────────────────────  Tabellen (in Karten)  ───────────────────────── */
+.card table thead th,
+.card-flat table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-line);
+  z-index: 1;
+}
+.card table tbody tr,
+.card-flat table tbody tr {
+  transition: background 0.12s ease;
+}
+.card table tbody tr:hover,
+.card-flat table tbody tr:hover {
+  background: var(--color-hover);
+}
+
+/* ─────────────────────────  Badges (Status / Score)  ───────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.badge-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+.badge-neutral {
+  background: var(--color-paper-2);
+  color: var(--color-ink-soft);
+}
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.badge-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.badge-error {
+  background: var(--error-soft);
+  color: var(--error);
+}
+.badge-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.badge-gold {
+  background: var(--color-gold-soft);
+  color: var(--color-gold);
+}
+
+/* ─────────────────────────  Animationen  ───────────────────────── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fadeUp 0.35s cubic-bezier(0.2, 0.65, 0.2, 1) both;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-paper-2);
+  border-radius: 8px;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--hover), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

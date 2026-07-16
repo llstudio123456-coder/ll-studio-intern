@@ -1,0 +1,24 @@
+# Build-Artefakte & Abhängigkeiten (werden im Image frisch erzeugt)
+node_modules
+.next
+out
+
+# Laufzeitdaten – NIEMALS ins Image (liegen auf dem Volume)
+.data
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets – NIEMALS ins Image
+.env
+.env.local
+.env.*.local
+
+# Entwicklungs-/Repo-Kram
+.git
+.gitignore
+.claude
+*.log
+README.md
+DEPLOYMENT.md
+scripts/*-tests.mjs
