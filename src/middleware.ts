@@ -16,7 +16,11 @@ function isPublic(path: string): boolean {
   return /\.(png|jpg|jpeg|gif|svg|ico|txt|webmanifest|woff2?)$/.test(path)
 }
 
-const json = (status: number, error: string) => NextResponse.json({ ok: false, error }, { status })
+// `success` gehört auch hier hinein: Die Middleware blockt API-Anfragen, BEVOR sie die Route
+// erreichen (z. B. /api/admin/step-up ohne Session). Ohne das Feld bekäme die Oberfläche für
+// denselben Fehlerfall mal ein `success`, mal keines — je nachdem, wer geblockt hat.
+const json = (status: number, error: string) =>
+  NextResponse.json({ success: false, ok: false, error }, { status, headers: { 'Cache-Control': 'no-store' } })
 
 /** Seiten, die nach erfolgreicher Eingabe zur ursprünglich angeforderten Seite zurückführen. */
 const RETURNING_PAGES = ['/login', '/gate', '/admin/bestaetigen']
