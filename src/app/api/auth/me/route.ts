@@ -4,7 +4,7 @@ import { authConfigured, isProd } from '@/server/auth/config'
 import { getUserById, getPasswordRow } from '@/server/auth/repo'
 import { gateStatus } from '@/server/auth/gate'
 import { GATE_COOKIE, verifyGate } from '@/server/auth/gate-cookie'
-import { INACTIVE_STATUSES } from '@shared/auth'
+import { INACTIVE_STATUSES, roleAtLeast } from '@shared/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,6 +34,14 @@ export async function GET() {
     prodRefuse: gs.refuseInProd,
     authenticated,
     user: authenticated ? { email: user!.email, name: user!.name, picture: user!.picture, role: user!.role, status: user!.status } : null,
-    gate: { required: true, verified: gateVerified, isDev: gs.isDevelopmentPassword }
+    gate: {
+      required: true,
+      verified: gateVerified,
+      isDev: gs.isDevelopmentPassword,
+      needsSetup: gs.needsSetup,
+      // Einrichten darf nur ein Admin. Ohne dieses Flag zeigt die Seite einem Member sonst ein
+      // Formular, das die Route anschließend mit 403 ablehnt.
+      canSetup: authenticated && gs.needsSetup && roleAtLeast(user!.role, 'admin')
+    }
   })
 }

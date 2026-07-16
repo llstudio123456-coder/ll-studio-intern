@@ -28,19 +28,24 @@ export interface GateStatus {
   gateEpoch: number
   /** In Produktion mit Testpasswort/unkonfiguriert → Zugriff hart verweigern. */
   refuseInProd: boolean
+  /** Es existiert noch kein nutzbares Passwort → Ersteinrichtung ist fällig (und erlaubt). */
+  needsSetup: boolean
 }
 
 export function gateStatus(): GateStatus {
   const row = getPasswordRow()
   const configured = !!row.passwordHash && row.isActive
-  const refuseInProd = isProd && (!configured || row.isDevelopmentPassword)
+  // In Produktion zählt ein Dev-Testpasswort wie „nicht eingerichtet": es wird ohnehin verweigert,
+  // also muss die Ersteinrichtung offenstehen — sonst käme niemand mehr hinein.
+  const needsSetup = !configured || (isProd && row.isDevelopmentPassword)
   return {
     configured,
     active: row.isActive,
     isDevelopmentPassword: row.isDevelopmentPassword,
     passwordVersion: row.passwordVersion,
     gateEpoch: row.gateEpoch,
-    refuseInProd
+    refuseInProd: isProd && (!configured || row.isDevelopmentPassword),
+    needsSetup
   }
 }
 
