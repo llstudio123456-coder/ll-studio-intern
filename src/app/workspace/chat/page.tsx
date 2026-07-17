@@ -195,8 +195,12 @@ function ChatInner() {
 
           {channelId && !data && !error && <SkeletonRows rows={6} />}
 
+          {/* dvh statt vh: berücksichtigt die ein- und ausfahrenden Browserleisten auf dem
+              Smartphone. Mobil zieht die Höhe zusätzlich Top-Bar und Bottom-Nav ab (≈14rem);
+              ab lg gilt die Desktop-Rechnung. So sitzt das Eingabefeld nie hinter der Tastatur
+              oder der Bottom-Navigation. */}
           {data && (
-            <div className="flex h-[calc(100vh-260px)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-[var(--color-line)]">
+            <div className="flex h-[calc(100dvh-14rem)] min-h-[360px] flex-col overflow-hidden rounded-xl border border-[var(--color-line)] lg:h-[calc(100dvh-140px)]">
               {/* Kopf */}
               <header className="flex items-center gap-2 border-b border-[var(--color-line)] px-4 py-3">
                 <button onClick={() => router.replace('/workspace/chat')} className="lg:hidden" aria-label="Zurück"><ArrowLeft size={16} /></button>

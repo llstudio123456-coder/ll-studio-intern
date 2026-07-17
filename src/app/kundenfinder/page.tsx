@@ -369,7 +369,7 @@ function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecher
           </div>
         </div>
       ) : (
-        <div className="card max-h-[calc(100vh-230px)] overflow-auto p-0">
+        <div className="card max-h-[calc(100dvh-230px)] overflow-auto p-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-[var(--color-surface)] text-left shadow-[0_1px_0_var(--color-line)]">
               <tr>

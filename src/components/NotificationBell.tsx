@@ -18,7 +18,7 @@ const ICON: Record<NotificationKind, typeof Bell> = {
  * Glocke mit ungelesenen Benachrichtigungen.
  * Hängt am selben Echtzeit-Strom wie der Chat — neue Meldungen erscheinen ohne Neuladen.
  */
-export function NotificationBell({ authenticated }: { authenticated: boolean }) {
+export function NotificationBell({ authenticated, placement = 'up' }: { authenticated: boolean; placement?: 'up' | 'down' }) {
   const router = useRouter()
   const [items, setItems] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
@@ -89,7 +89,7 @@ export function NotificationBell({ authenticated }: { authenticated: boolean }) 
       </button>
 
       {open && (
-        <div className="card absolute right-0 bottom-full z-50 mb-2 w-[320px] p-0 shadow-xl">
+        <div className={`card absolute right-0 z-50 w-[min(320px,calc(100vw-1rem))] p-0 shadow-xl ${placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
             <span className="text-xs font-medium">Benachrichtigungen</span>
             {unread > 0 && (

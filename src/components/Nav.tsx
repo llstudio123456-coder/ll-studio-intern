@@ -102,7 +102,7 @@ export function Nav() {
   const kfActive = (v: string) => inKf && ((view || 'ergebnisse') === v || (!view && v === 'ergebnisse'))
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-5 sm:flex">
+    <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-5 lg:flex">
       <Link href="/" className="mb-6 flex items-center gap-3 px-2">
         <Logo className="h-9" />
         <div className="leading-tight">
