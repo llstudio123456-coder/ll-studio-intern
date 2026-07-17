@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings, ChevronRight,
   Search, ClipboardList, Phone, Ban, History as HistoryIcon, Save, Layers, SlidersHorizontal, LogOut, LayoutGrid,
-  ShieldCheck, HardDrive, MailPlus, StickyNote, CheckSquare
+  ShieldCheck, HardDrive, MailPlus, StickyNote, CheckSquare, MessageSquare
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { roleAtLeast, type Role } from '@shared/auth'
@@ -50,6 +50,25 @@ export function Nav() {
   }, [])
   useEffect(() => { loadCounts() }, [loadCounts, path, view])
   useEffect(() => { fetch('/api/auth/me').then((r) => r.json()).then(setMe).catch(() => {}) }, [])
+
+  // Ungelesene Chatnachrichten im Menü. Der Echtzeit-Strom hält die Zahl aktuell, ohne dass
+  // jemand die Seite neu laden muss — er liefert nur Ereignisse aus erlaubten Kanälen.
+  const [chatUnread, setChatUnread] = useState(0)
+  const loadChatUnread = useCallback(() => {
+    fetch('/api/workspace/chat/channels')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.channels) setChatUnread(d.channels.reduce((n: number, c: { unread?: number }) => n + (c.unread || 0), 0)) })
+      .catch(() => {})
+  }, [])
+  useEffect(() => { loadChatUnread() }, [loadChatUnread, path])
+  useEffect(() => {
+    if (!me?.authenticated) return
+    const es = new EventSource('/api/workspace/chat/stream')
+    const onAny = () => loadChatUnread()
+    es.addEventListener('message', onAny)
+    es.addEventListener('delete', onAny)
+    return () => es.close()
+  }, [me?.authenticated, loadChatUnread])
 
   // roleAtLeast statt Gleichheit: Der Inhaber ist ranghöher als ein Admin und muss den
   // Adminbereich ebenfalls sehen. Das Ausblenden ist reine Bequemlichkeit — die Prüfung
@@ -138,6 +157,7 @@ export function Nav() {
           <Item href="/workspace" label="Dateien" icon={HardDrive} active={path === '/workspace'} />
           <Item href="/workspace/notizen" label="Notizen" icon={StickyNote} active={path.startsWith('/workspace/notizen')} />
           <Item href="/workspace/aufgaben" label="Aufgaben" icon={CheckSquare} active={path.startsWith('/workspace/aufgaben')} />
+          <Item href="/workspace/chat" label="Chat" icon={MessageSquare} active={path.startsWith('/workspace/chat')} count={chatUnread || undefined} />
         </Group>
 
         {/* System */}

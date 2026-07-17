@@ -25,8 +25,106 @@ export function getDb(): Database.Database {
   migrateAllowlist(db)
   migrateNotes(db)
   migrateTasks(db)
+  migrateChat(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Team-Chat).
+ *
+ * Alle Workspace-Tabellen tragen das Präfix `workspace_` — auch wenn der Name aktuell frei wäre.
+ * Der Kundenfinder soll sich künftige Namen ohne Kollisionsgefahr nehmen können.
+ *
+ * Zugriff hängt an `workspace_channel_members`, NICHT an einer Kanal-Eigenschaft allein: Wer nicht
+ * Mitglied ist, sieht einen privaten Kanal auch über die direkte URL nicht (Spezifikation §22).
+ * `visibility = 'offen'` bedeutet, dass jeder Mitarbeiter beitreten und mitlesen darf.
+ */
+function migrateChat(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_channels (
+    id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    kind TEXT NOT NULL DEFAULT 'kanal',
+    visibility TEXT NOT NULL DEFAULT 'offen',
+    -- Nur Owner/Admin dürfen schreiben (Ankündigungskanal, Spezifikation §10).
+    write_role TEXT,
+    company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+    created_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    archived_at TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_workspace_channels_slug ON workspace_channels(slug) WHERE archived_at IS NULL;
+  CREATE INDEX IF NOT EXISTS ix_workspace_channels_kind ON workspace_channels(kind);
+
+  CREATE TABLE IF NOT EXISTS workspace_channel_members (
+    channel_id TEXT NOT NULL REFERENCES workspace_channels(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    last_read_at TEXT,
+    joined_at TEXT NOT NULL,
+    PRIMARY KEY (channel_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_members_user ON workspace_channel_members(user_id);
+
+  CREATE TABLE IF NOT EXISTS workspace_messages (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES workspace_channels(id) ON DELETE CASCADE,
+    author_id TEXT REFERENCES app_users(id),
+    body TEXT NOT NULL,
+    reply_to TEXT REFERENCES workspace_messages(id) ON DELETE SET NULL,
+    file_id TEXT REFERENCES files(id) ON DELETE SET NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    edited_at TEXT,
+    created_at TEXT NOT NULL,
+    deleted_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_messages_channel ON workspace_messages(channel_id, created_at);
+  CREATE INDEX IF NOT EXISTS ix_workspace_messages_author ON workspace_messages(author_id);
+
+  -- Erwähnungen getrennt speichern: So lässt sich „erwähnt mich" abfragen, ohne jede
+  -- Nachricht nach @Namen zu durchsuchen.
+  CREATE TABLE IF NOT EXISTS workspace_message_mentions (
+    message_id TEXT NOT NULL REFERENCES workspace_messages(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    PRIMARY KEY (message_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_mentions_user ON workspace_message_mentions(user_id);
+  `)
+
+  seedChannels(db)
+}
+
+/**
+ * Legt die Standardkanäle einmalig an (Spezifikation §9).
+ * Über schema_meta markiert: Ein gelöschter Kanal soll nicht bei jedem Serverstart
+ * wieder auftauchen.
+ */
+function seedChannels(db: Database.Database) {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, at TEXT NOT NULL);`)
+  const KEY = 'chat_default_channels_v1'
+  if (db.prepare('SELECT 1 FROM schema_meta WHERE key = ?').get(KEY)) return
+
+  const defaults: [string, string, string, string | null][] = [
+    ['allgemein', 'Allgemein', 'Alles, was sonst nirgends passt.', null],
+    ['ankuendigungen', 'Ankündigungen', 'Wichtige Mitteilungen. Nur Inhaber und Administratoren schreiben hier.', 'admin'],
+    ['vertrieb', 'Vertrieb', 'Kundengewinnung, Angebote, Nachfassen.', null],
+    ['kundenprojekte', 'Kundenprojekte', 'Laufende Kundenarbeit.', null],
+    ['webentwicklung', 'Webentwicklung', 'Technik, Umsetzung, Deployment.', null],
+    ['design', 'Design', 'Entwürfe, Feedback, Bildmaterial.', null],
+    ['marketing', 'Marketing', 'Social Media, Kampagnen, Texte.', null],
+    ['organisation', 'Organisation', 'Interne Abläufe und Termine.', null],
+    ['ideen', 'Ideen', 'Alles, was noch nicht spruchreif ist.', null]
+  ]
+  const t = new Date().toISOString()
+  const ins = db.prepare(
+    'INSERT OR IGNORE INTO workspace_channels (id,slug,name,description,kind,visibility,write_role,created_at) VALUES (?,?,?,?,?,?,?,?)'
+  )
+  for (const [slug, name, description, writeRole] of defaults) {
+    ins.run(`ch-${slug}`, slug, name, description, 'kanal', 'offen', writeRole, t)
+  }
+  db.prepare('INSERT INTO schema_meta (key,value,at) VALUES (?,?,?)').run(KEY, String(defaults.length), t)
 }
 
 /**
