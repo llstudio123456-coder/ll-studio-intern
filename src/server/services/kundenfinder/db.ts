@@ -24,8 +24,69 @@ export function getDb(): Database.Database {
   migrateFiles(db)
   migrateAllowlist(db)
   migrateNotes(db)
+  migrateTasks(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Workspace-Aufgaben).
+ *
+ * ACHTUNG: `tasks` ist bereits vom Kundenfinder belegt (company_id/title/…). Alle Workspace-
+ * Tabellen tragen deshalb das Präfix `workspace_`. Vor jedem neuen CREATE TABLE prüfen, ob der
+ * Name schon existiert — `IF NOT EXISTS` schlägt sonst still fehl und der nächste CREATE INDEX
+ * bricht die gesamte Migration ab.
+ *
+ * `visibility`: 'private' sehen nur Ersteller und Zuständiger — auch kein Administrator
+ * (Spezifikation §30). 'team' sehen alle freigeschalteten Mitarbeiter.
+ */
+function migrateTasks(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'persoenlich',
+    status TEXT NOT NULL DEFAULT 'offen',
+    priority TEXT NOT NULL DEFAULT 'normal',
+    visibility TEXT NOT NULL DEFAULT 'team',
+    creator_id TEXT REFERENCES app_users(id),
+    assignee_id TEXT REFERENCES app_users(id),
+    company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+    parent_id TEXT REFERENCES workspace_tasks(id) ON DELETE CASCADE,
+    start_date TEXT,
+    due_date TEXT,
+    due_time TEXT,
+    estimate_minutes INTEGER,
+    tags TEXT,
+    recurrence TEXT,
+    remind_at TEXT,
+    completed_at TEXT,
+    completed_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT REFERENCES app_users(id),
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES app_users(id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_assignee ON workspace_tasks(assignee_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_creator ON workspace_tasks(creator_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_company ON workspace_tasks(company_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_status ON workspace_tasks(status);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_due ON workspace_tasks(due_date);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_parent ON workspace_tasks(parent_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_tasks_deleted ON workspace_tasks(deleted_at);
+
+  CREATE TABLE IF NOT EXISTS workspace_task_checklist (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES workspace_tasks(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_checklist_task ON workspace_task_checklist(task_id);
+  `)
 }
 
 /**
