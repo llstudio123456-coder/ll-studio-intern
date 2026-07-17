@@ -4,6 +4,7 @@ import {
   getTask, getTaskRaw, updateTask, setStatus, trashTask, restoreTask, purgeTask,
   addChecklistItem, toggleChecklistItem, removeChecklistItem, type Actor
 } from '@/server/services/workspace/tasksRepo'
+import { notify } from '@/server/services/workspace/notificationsRepo'
 import { canDeleteTask, canEditTask, canReadTask, type TaskStatus } from '@shared/tasks'
 
 export const runtime = 'nodejs'
@@ -97,6 +98,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       // Aufgabe nicht fürs ganze Team öffnen.
       if (body.visibility && body.visibility !== raw.visibility && !mayDelete) return forbidden()
       updateTask(actor, id, body)
+      // Nur bei einem WECHSEL benachrichtigen: Sonst bekäme der Zuständige bei jeder
+      // Kleinigkeit — Termin, Priorität, Tippfehler — erneut eine Meldung.
+      const neu = body.assigneeId as string | undefined
+      if (neu && neu !== raw.assigneeId) {
+        notify({
+          userIds: [neu],
+          kind: 'task_assigned',
+          title: `${g.user.name || g.user.email} hat dir eine Aufgabe zugewiesen`,
+          body: raw.title,
+          link: '/workspace/aufgaben?view=meine',
+          actorId: actor.id,
+          sourceType: 'task',
+          sourceId: id
+        })
+      }
       break
     }
   }

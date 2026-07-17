@@ -9,8 +9,9 @@ import {
   ShieldCheck, HardDrive, MailPlus, StickyNote, CheckSquare, MessageSquare
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { roleAtLeast, type Role } from '@shared/auth'
+import { roleAtLeast, ROLE_LABELS, type Role } from '@shared/auth'
 import { Logo } from './Logo'
+import { NotificationBell } from './NotificationBell'
 import { cls } from '@/lib/format'
 
 /* ── Kundenfinder-Ansichten (Query-Param statt langer Tab-Leiste) ── */
@@ -177,8 +178,11 @@ export function Nav() {
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <div className="truncate text-[12px] font-medium text-[var(--color-ink)]">{me.user.name || me.user.email}</div>
-              <div className="truncate text-[10px] text-[var(--color-muted)]">{me.user.role === 'admin' ? 'Administrator' : me.user.role === 'viewer' ? 'Nur Lesen' : 'Mitarbeiter'}</div>
+              {/* Zentrale Labels statt eigener Fallunterscheidung: Die frühere Kette kannte nur
+                  admin und viewer — ein Inhaber wurde dadurch als „Mitarbeiter" angezeigt. */}
+              <div className="truncate text-[10px] text-[var(--color-muted)]">{ROLE_LABELS[me.user.role as Role] ?? '—'}</div>
             </div>
+            <NotificationBell authenticated={!!me?.authenticated} />
             <button onClick={() => signOut({ redirectTo: '/login' })} title="Abmelden" className="btn-icon p-1.5 text-[var(--color-muted)]"><LogOut size={15} /></button>
           </div>
         ) : (

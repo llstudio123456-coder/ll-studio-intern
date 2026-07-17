@@ -12,6 +12,9 @@ export type ChatEvent =
   | { type: 'update'; channelId: string; messageId: string }
   | { type: 'delete'; channelId: string; messageId: string }
   | { type: 'typing'; channelId: string; userId: string; name: string }
+  // Benachrichtigungen laufen bewusst über denselben Strom: ein zweiter Kanal wäre eine
+  // zweite Rechteprüfung und damit eine zweite Fehlerquelle.
+  | { type: 'notification' }
 
 type Listener = (e: ChatEvent) => void
 

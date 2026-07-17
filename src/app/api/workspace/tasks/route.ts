@@ -1,6 +1,7 @@
 import { guardApi } from '@/server/auth/guard'
 import { audit } from '@/server/auth/repo'
 import { listTasks, createTask, taskCounts, assignableUsers, type Actor, type ListFilter } from '@/server/services/workspace/tasksRepo'
+import { notify } from '@/server/services/workspace/notificationsRepo'
 import type { TaskKind, TaskPriority, TaskStatus, TaskVisibility } from '@shared/tasks'
 
 export const runtime = 'nodejs'
@@ -77,6 +78,21 @@ export async function POST(req: Request) {
     recurrence: (body.recurrence as never) || null,
     remindAt: (body.remindAt as string) || null
   })
+
+  // Wer eine Aufgabe bekommt, muss davon erfahren. notify() lässt den Auslöser selbst aus —
+  // sich selbst eine Aufgabe zu geben erzeugt also keine Benachrichtigung.
+  if (task.assigneeId) {
+    notify({
+      userIds: [task.assigneeId],
+      kind: 'task_assigned',
+      title: `${g.user.name || g.user.email} hat dir eine Aufgabe zugewiesen`,
+      body: task.title,
+      link: '/workspace/aufgaben?view=meine',
+      actorId: actor.id,
+      sourceType: 'task',
+      sourceId: task.id
+    })
+  }
 
   audit('task_created', { userId: actor.id, email: g.user.email, resource: task.id, meta: { title, assignee: task.assigneeId } })
   return Response.json({ success: true, ok: true, task })

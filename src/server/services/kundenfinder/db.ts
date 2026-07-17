@@ -26,8 +26,39 @@ export function getDb(): Database.Database {
   migrateNotes(db)
   migrateTasks(db)
   migrateChat(db)
+  migrateNotifications(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Benachrichtigungen).
+ *
+ * Eine Zeile je Empfänger — nicht ein Ereignis mit Empfängerliste. Das kostet etwas Platz,
+ * macht aber „gelesen" pro Person trivial und verhindert, dass jemand über eine gemeinsame
+ * Zeile Rückschlüsse auf die übrigen Empfänger zieht.
+ *
+ * `link` ist stets ein interner Pfad. Beim Anzeigen wird zusätzlich geprüft, dass er mit „/“
+ * beginnt — eine Benachrichtigung darf nie nach außen führen.
+ */
+function migrateNotifications(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    link TEXT,
+    actor_id TEXT REFERENCES app_users(id) ON DELETE SET NULL,
+    source_type TEXT,
+    source_id TEXT,
+    read_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_notif_user ON workspace_notifications(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS ix_workspace_notif_unread ON workspace_notifications(user_id, read_at);
+  `)
 }
 
 /**

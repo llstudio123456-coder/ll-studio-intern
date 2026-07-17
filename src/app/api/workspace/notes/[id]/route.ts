@@ -4,6 +4,7 @@ import {
   getNote, getNoteRaw, updateNote, trashNote, restoreNote, purgeNote, setArchived,
   setShares, sharedUserIds, listShares, type Actor
 } from '@/server/services/workspace/notesRepo'
+import { notify } from '@/server/services/workspace/notificationsRepo'
 import { assignableVisibilities, canDeleteNote, canEditNote, canReadNote, type NoteShare, type NoteVisibility } from '@shared/notes'
 
 export const runtime = 'nodejs'
@@ -101,8 +102,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     case 'share': {
       // Freigeben darf nur der Besitzer — sonst könnte ein Mitleser die Runde erweitern.
       if (!canDeleteNote(actor, note)) return forbidden()
-      setShares(id, (body.shares || []).filter((s) => s.userId && s.userId !== actor.id))
-      audit('note_shared', { userId: actor.id, email: g.user.email, resource: id, meta: { count: body.shares?.length ?? 0 } })
+      const shares = (body.shares || []).filter((s) => s.userId && s.userId !== actor.id)
+      // Nur NEU hinzugekommene benachrichtigen: Wer schon Zugriff hatte, braucht bei jeder
+      // Änderung der Freigabeliste keine erneute Meldung.
+      const vorher = new Set(sharedUserIds(id))
+      setShares(id, shares)
+      notify({
+        userIds: shares.map((s) => s.userId).filter((u) => !vorher.has(u)),
+        kind: 'note_shared',
+        title: `${g.user.name || g.user.email} hat eine Notiz mit dir geteilt`,
+        body: note.title || undefined,
+        link: '/workspace/notizen',
+        actorId: actor.id,
+        sourceType: 'note',
+        sourceId: id
+      })
+      audit('note_shared', { userId: actor.id, email: g.user.email, resource: id, meta: { count: shares.length } })
       break
     }
     case 'update':
