@@ -27,8 +27,69 @@ export function getDb(): Database.Database {
   migrateTasks(db)
   migrateChat(db)
   migrateNotifications(db)
+  migrateProjects(db)
   _db = db
   return db
+}
+
+/**
+ * Additive Migration (Projekte) — die Klammer, die Kunde, Aufgaben, Dateien, Chat und Notizen
+ * zusammenhält.
+ *
+ * `company_id` verbindet ein Projekt mit einem echten Kundenfinder-Kunden. `chat_channel_id` und
+ * `folder_id` verweisen auf einen automatisch angelegten Projektchat bzw. Projektordner — so ist
+ * das Projekt kein isoliertes Modul, sondern der zentrale Knoten.
+ *
+ * Zugriff hängt an `workspace_project_members` bei privaten Projekten; „team"-Projekte sehen alle
+ * freigeschalteten Mitarbeiter. Wie überall: geprüft wird serverseitig, nicht über die Oberfläche.
+ */
+function migrateProjects(db: Database.Database) {
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'website',
+    status TEXT NOT NULL DEFAULT 'geplant',
+    priority TEXT NOT NULL DEFAULT 'normal',
+    visibility TEXT NOT NULL DEFAULT 'team',
+    color TEXT,
+    company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+    lead_id TEXT REFERENCES app_users(id),
+    chat_channel_id TEXT REFERENCES workspace_channels(id) ON DELETE SET NULL,
+    folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+    start_date TEXT,
+    due_date TEXT,
+    completed_at TEXT,
+    created_by TEXT REFERENCES app_users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    archived_at TEXT,
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES app_users(id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_projects_company ON workspace_projects(company_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_projects_status ON workspace_projects(status);
+  CREATE INDEX IF NOT EXISTS ix_workspace_projects_lead ON workspace_projects(lead_id);
+  CREATE INDEX IF NOT EXISTS ix_workspace_projects_deleted ON workspace_projects(deleted_at);
+
+  CREATE TABLE IF NOT EXISTS workspace_project_members (
+    project_id TEXT NOT NULL REFERENCES workspace_projects(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'mitglied',
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_workspace_project_members_user ON workspace_project_members(user_id);
+  `)
+
+  // workspace_tasks bekam project_id nachträglich — ohne diese Spalte könnten Aufgaben nicht
+  // an ein Projekt gehängt werden. ALTER ist additiv und idempotent über die Spaltenprüfung.
+  const taskCols = db.prepare("PRAGMA table_info(workspace_tasks)").all().map((r) => (r as { name: string }).name)
+  if (!taskCols.includes('project_id')) {
+    db.exec("ALTER TABLE workspace_tasks ADD COLUMN project_id TEXT REFERENCES workspace_projects(id) ON DELETE SET NULL")
+    db.exec("CREATE INDEX IF NOT EXISTS ix_workspace_tasks_project ON workspace_tasks(project_id)")
+  }
 }
 
 /**

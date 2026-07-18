@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Link2, Sparkles, Eye, Users, FileText, Wand2, Settings,
   Save, Layers, LogOut, HardDrive, MailPlus, StickyNote, CheckSquare, MessageSquare,
-  ShieldCheck, Home
+  ShieldCheck, Home, FolderKanban
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { roleAtLeast, type Role } from '@shared/auth'
@@ -67,6 +67,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Workspace',
     links: [
       { href: '/workspace', label: 'Dateien', icon: HardDrive, active: exact('/workspace') },
+      { href: '/workspace/projekte', label: 'Projekte', icon: FolderKanban, active: startsWith('/workspace/projekte') },
       { href: '/workspace/notizen', label: 'Notizen', icon: StickyNote, active: startsWith('/workspace/notizen') },
       { href: '/workspace/aufgaben', label: 'Aufgaben', icon: CheckSquare, active: startsWith('/workspace/aufgaben') },
       { href: '/workspace/chat', label: 'Chat', icon: MessageSquare, active: startsWith('/workspace/chat'), count: (c) => c.chatUnread || undefined }

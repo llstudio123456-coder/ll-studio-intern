@@ -85,6 +85,7 @@ export interface ListFilter {
   companyId?: string
   assigneeId?: string
   parentId?: string | null
+  projectId?: string
   query?: string
   limit?: number
   offset?: number
@@ -138,6 +139,7 @@ export function listTasks(actor: Actor, f: ListFilter = {}): { tasks: Task[]; to
   // parentId === null: nur Hauptaufgaben (Unteraufgaben hängen an ihrer Aufgabe)
   if (f.parentId === null) where.push('t.parent_id IS NULL')
   else if (f.parentId) { where.push('t.parent_id = ?'); params.push(f.parentId) }
+  if (f.projectId) { where.push('t.project_id = ?'); params.push(f.projectId) }
   if (f.query?.trim()) {
     where.push('(LOWER(t.title) LIKE ? OR LOWER(t.description) LIKE ? OR LOWER(IFNULL(t.tags,\'\')) LIKE ?)')
     const q = `%${f.query.trim().toLowerCase()}%`
@@ -214,6 +216,7 @@ export function createTask(actor: Actor, p: {
   assigneeId?: string | null
   companyId?: string | null
   parentId?: string | null
+  projectId?: string | null
   startDate?: string | null
   dueDate?: string | null
   dueTime?: string | null
@@ -227,9 +230,9 @@ export function createTask(actor: Actor, p: {
   getDb()
     .prepare(
       `INSERT INTO workspace_tasks
-       (id,title,description,kind,status,priority,visibility,creator_id,assignee_id,company_id,parent_id,
+       (id,title,description,kind,status,priority,visibility,creator_id,assignee_id,company_id,parent_id,project_id,
         start_date,due_date,due_time,estimate_minutes,tags,recurrence,remind_at,created_at,updated_at,updated_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       id,
@@ -243,6 +246,7 @@ export function createTask(actor: Actor, p: {
       p.assigneeId || null,
       p.companyId || null,
       p.parentId || null,
+      p.projectId || null,
       p.startDate || null,
       p.dueDate || null,
       p.dueTime || null,

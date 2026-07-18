@@ -28,6 +28,7 @@ export async function GET(req: Request) {
     companyId: p('companyId'),
     assigneeId: p('assigneeId'),
     parentId: parent === 'root' ? null : parent || undefined,
+    projectId: p('projectId'),
     query: p('q'),
     limit: p('limit') ? Number(p('limit')) : undefined
   }
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
     assigneeId: (body.assigneeId as string) || null,
     companyId: (body.companyId as string) || null,
     parentId: (body.parentId as string) || null,
+    projectId: (body.projectId as string) || null,
     startDate: (body.startDate as string) || null,
     dueDate: (body.dueDate as string) || null,
     dueTime: (body.dueTime as string) || null,

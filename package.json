@@ -22,6 +22,7 @@
     "test:tasks": "node scripts/tasks-tests.mjs",
     "test:chat": "node scripts/chat-tests.mjs",
     "test:notifications": "node scripts/notifications-tests.mjs",
+    "test:projects": "node scripts/projects-tests.mjs",
     "setup:dev-access-password": "node scripts/setup-dev-access-password.mjs"
   },
   "dependencies": {
