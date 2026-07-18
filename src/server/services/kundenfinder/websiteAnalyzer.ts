@@ -1,7 +1,10 @@
 import type { WebsiteAnalysis } from '@shared/kundenfinder'
+import { classifyWebsiteState } from '@shared/websiteState'
 import { BrowserManager } from '../browser'
 import { normalizeUrl } from '../../utils/url'
 import { log } from '../../utils/logger'
+
+const safeHost = (u: string): string | undefined => { try { return new URL(u).host } catch { return undefined } }
 
 /** SSRF-Schutz: interne/private Hosts niemals analysieren. */
 export function isInternalHost(url: string): boolean {
@@ -49,7 +52,9 @@ function analyzeScript() {
   const overflow = scrollW > vw + 24
   return {
     title, metaDesc, viewport, h1, imgs, hasTel, hasMailto, hasImpressum, hasDatenschutz, hasContactPage, hasForm,
-    cookieBanner, buttons, navItems, textLen, copyrightYear, overflow, vw, scrollW
+    cookieBanner, buttons, navItems, textLen, copyrightYear, overflow, vw, scrollW,
+    // Sichtbarer Text (gerendert, inkl. JS-Inhalt) für die Zustands-Klassifizierung.
+    sample: text.slice(0, 5000)
   }
 }
 /* eslint-enable */
@@ -67,7 +72,9 @@ export async function analyzeWebsite(bm: BrowserManager, rawUrl?: string): Promi
       score: 92,
       breakdown: { technik: 25, mobile: 20, performance: 12, design: 18, inhalt: 12, aktualitaet: 5 },
       issues: ['Keine Website gefunden – sehr hohes Potenzial für eine neue Website.'],
-      analyzedAt
+      analyzedAt,
+      state: 'keine',
+      stateReason: 'Für dieses Unternehmen ist keine Website hinterlegt.'
     }
   }
   if (isInternalHost(url)) {
@@ -86,8 +93,9 @@ export async function analyzeWebsite(bm: BrowserManager, rawUrl?: string): Promi
     await page.waitForTimeout(1200)
     const ok = !!resp && resp.status() < 400
     if (!ok) {
-      return { url, reachable: false, https, hasWebsite: true, score: 85, breakdown: { technik: 22, mobile: 18, performance: 12, design: 16, inhalt: 12, aktualitaet: 5 }, issues: [`Website nicht erreichbar (Status ${resp?.status() ?? 'kein Response'}).`], analyzedAt }
+      return { url, reachable: false, https, hasWebsite: true, score: 85, breakdown: { technik: 22, mobile: 18, performance: 12, design: 16, inhalt: 12, aktualitaet: 5 }, issues: [`Website nicht erreichbar (Status ${resp?.status() ?? 'kein Response'}).`], analyzedAt, state: 'nicht_erreichbar', stateReason: `Die Website hat nicht geantwortet (Status ${resp?.status() ?? 'kein Response'}).` }
     }
+    const finalUrl = page.url()
     const m = (await page.evaluate(analyzeScript)) as ReturnType<typeof analyzeScript>
 
     // ── Gewichtete Bewertung: mehr Probleme = höheres Potenzial ──
@@ -128,10 +136,22 @@ export async function analyzeWebsite(bm: BrowserManager, rawUrl?: string): Promi
     aktualitaet = Math.min(5, aktualitaet)
 
     const score = Math.min(100, technik + mobile + performance + design + inhalt + aktualitaet)
-    log.info(`Website-Analyse ${url}: Potenzial ${score} (${loadMs}ms)`)
-    return { url, reachable: true, https, hasWebsite: true, score, loadMs, breakdown: { technik, mobile, performance, design, inhalt, aktualitaet }, issues, analyzedAt }
+
+    // Website-Zustand aus den gerenderten Metriken (leer/geparkt/… vs. vorhanden). Bewertet den
+    // tatsächlich sichtbaren Text (§11) — nicht nur Statuscode oder HTML-Länge.
+    const cls = classifyWebsiteState({
+      hasWebsite: true, reachable: true, status: resp?.status(),
+      finalUrl, originalHost: safeHost(url),
+      title: m.title, text: m.sample, textLen: m.textLen, h1: m.h1, navItems: m.navItems, imgs: m.imgs,
+      hasImpressum: m.hasImpressum, hasContactPage: m.hasContactPage
+    })
+    // Ist die Seite leer/geparkt o. Ä., aber der Punkte-Score stuft sie zu positiv ein? Dann Hinweis.
+    if (cls.state !== 'vorhanden' && cls.state !== 'einfach' && cls.state !== 'schlecht') issues.unshift(cls.reason)
+
+    log.info(`Website-Analyse ${url}: Potenzial ${score}, Zustand ${cls.state} (${loadMs}ms)`)
+    return { url, reachable: true, https, hasWebsite: true, score, loadMs, breakdown: { technik, mobile, performance, design, inhalt, aktualitaet }, issues, analyzedAt, state: cls.state, stateReason: cls.reason }
   } catch (e) {
-    return { url, reachable: false, https, hasWebsite: true, score: 80, breakdown: { technik: 20, mobile: 18, performance: 12, design: 15, inhalt: 10, aktualitaet: 5 }, issues: ['Analyse fehlgeschlagen: ' + (e instanceof Error ? e.message : String(e))], analyzedAt }
+    return { url, reachable: false, https, hasWebsite: true, score: 80, breakdown: { technik: 20, mobile: 18, performance: 12, design: 15, inhalt: 10, aktualitaet: 5 }, issues: ['Analyse fehlgeschlagen: ' + (e instanceof Error ? e.message : String(e))], analyzedAt, state: 'nicht_erreichbar', stateReason: 'Die Website konnte nicht analysiert werden.' }
   } finally {
     try {
       await page?.close()

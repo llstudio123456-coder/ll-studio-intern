@@ -83,6 +83,9 @@ export interface WebsiteAnalysis {
   loadMs?: number
   screenshot?: string
   analyzedAt: string
+  /** Automatisch erkannter Website-Zustand (leer/geparkt/… vs. vorhanden) — siehe @shared/websiteState. */
+  state?: string
+  stateReason?: string
 }
 
 export interface LeadScore {
@@ -131,6 +134,11 @@ export interface Company {
   lastContactAt?: string
   websiteScore?: number
   websiteReasons?: string[]
+  /** Effektiver Website-Zustand (manuelle Korrektur hat Vorrang, siehe @shared/websiteState). */
+  websiteState?: string
+  websiteStateReason?: string
+  websiteStateAuto?: string
+  websiteStateManual?: string
   leadScore?: number
   leadLabel?: string
   leadReasons?: string[]

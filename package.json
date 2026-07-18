@@ -14,6 +14,7 @@
     "test:ai": "node scripts/ai-preview-tests.mjs",
     "test:kundenfinder": "node scripts/kundenfinder-tests.mjs",
     "test:phone": "node scripts/phone-tests.mjs",
+    "test:website-state": "node scripts/website-state-tests.mjs",
     "test:auth": "node scripts/auth-tests.mjs",
     "test:admin": "node scripts/admin-tests.mjs",
     "test:workspace": "node scripts/workspace-tests.mjs",

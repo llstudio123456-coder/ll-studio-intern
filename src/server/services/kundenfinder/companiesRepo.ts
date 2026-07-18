@@ -58,6 +58,11 @@ function rowToCompany(r: any): Company {
     lastContactAt: r.last_contact_at || undefined,
     websiteScore: r.website_score ?? undefined,
     websiteReasons: jparse(r.website_reasons, undefined),
+    // Effektiver Zustand: manuelle Korrektur hat Vorrang vor der automatischen Erkennung.
+    websiteState: r.website_state_manual || r.website_state || undefined,
+    websiteStateAuto: r.website_state || undefined,
+    websiteStateManual: r.website_state_manual || undefined,
+    websiteStateReason: r.website_state_manual ? 'Manuell festgelegt.' : (r.website_state_reason || undefined),
     leadScore: r.lead_score ?? undefined,
     leadLabel: r.lead_label || undefined,
     leadReasons: jparse(r.lead_reasons, undefined),
@@ -418,7 +423,20 @@ export function saveWebsiteAnalysis(companyId: string, a: WebsiteAnalysis) {
     a.screenshot || null,
     a.analyzedAt
   )
-  db.prepare('UPDATE companies SET website_score = ?, website_reasons = ?, updated_at = ? WHERE id = ?').run(a.score, JSON.stringify(a.issues), now(), companyId)
+  // website_state ist der AUTOMATISCH erkannte Zustand. Die manuelle Korrektur
+  // (website_state_manual) wird hier bewusst NICHT angefasst — sie behält Vorrang (§15).
+  db.prepare('UPDATE companies SET website_score = ?, website_reasons = ?, website_state = ?, website_state_reason = ?, updated_at = ? WHERE id = ?')
+    .run(a.score, JSON.stringify(a.issues), a.state || null, a.stateReason || null, now(), companyId)
+}
+
+/**
+ * Manuelle Korrektur des Website-Zustands (§15). Hat Vorrang vor der automatischen Erkennung und
+ * wird von einer erneuten Analyse nicht überschrieben. `state = null` hebt die Korrektur wieder auf.
+ */
+export function setWebsiteStateManual(id: string, state: string | null, by: string): Company | null {
+  getDb().prepare('UPDATE companies SET website_state_manual = ?, website_state_manual_by = ?, website_state_manual_at = ?, updated_at = ? WHERE id = ?')
+    .run(state, state ? by : null, state ? now() : null, now(), id)
+  return getCompany(id)
 }
 export function latestAnalysis(companyId: string) {
   return getDb().prepare('SELECT * FROM website_analyses WHERE company_id = ? ORDER BY id DESC LIMIT 1').get(companyId)

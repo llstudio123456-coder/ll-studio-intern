@@ -1,5 +1,5 @@
 import type { Company, LeadStatus } from '@shared/kundenfinder'
-import { saveCompany, unsaveCompany, excludeCompany, removePermanently, addNote, getCompany } from '@/server/services/kundenfinder/companiesRepo'
+import { saveCompany, unsaveCompany, excludeCompany, removePermanently, addNote, getCompany, setWebsiteStateManual } from '@/server/services/kundenfinder/companiesRepo'
 import { guardApi } from '@/server/auth/guard'
 import { roleAtLeast } from '@shared/auth'
 import { audit } from '@/server/auth/repo'
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const mayDelete = !g.user || roleAtLeast(role, 'admin')
 
   try {
-    const body = (await req.json()) as { action: string; id: string; reason?: string; status?: LeadStatus; note?: string; dialog?: Partial<Company> }
+    const body = (await req.json()) as { action: string; id: string; reason?: string; status?: LeadStatus; note?: string; dialog?: Partial<Company>; websiteState?: string | null }
     const { action, id } = body
     if (!id) return Response.json({ ok: false, error: 'id fehlt.' }, { status: 400 })
 
@@ -40,6 +40,12 @@ export async function POST(req: Request) {
       if (!mayModify) return forbidden()
       const c = unsaveCompany(id)
       if (c) audit('company_unsaved', { userId: g.user?.id, email: g.user?.email, resource: id })
+      return Response.json({ ok: !!c, company: c })
+    }
+    if (action === 'website_state') {
+      // Manuelle Korrektur des Website-Zustands (§15) — hat Vorrang vor der Auto-Erkennung.
+      if (!mayModify) return forbidden()
+      const c = setWebsiteStateManual(id, body.websiteState ?? null, actor)
       return Response.json({ ok: !!c, company: c })
     }
     if (action === 'exclude') {

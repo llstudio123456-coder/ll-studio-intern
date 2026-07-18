@@ -14,6 +14,24 @@ import { useToast } from '@/lib/stores/toastStore'
 import { StatusBadge, ScoreBadge, Metric } from '@/components/ui/Ui'
 import { PhoneLink } from '@/components/PhoneLink'
 import { telHref } from '@shared/phone'
+import { WEBSITE_STATE_LABELS, WEBSITE_STATE_TONE, EMPTY_WEBSITE_STATES, type WebsiteState } from '@shared/websiteState'
+
+const WS_TONE_CLS: Record<'green' | 'amber' | 'red' | 'gray', string> = {
+  green: 'bg-emerald-50 text-emerald-700',
+  amber: 'bg-amber-50 text-amber-700',
+  red: 'bg-red-50 text-red-700',
+  gray: 'bg-[var(--color-paper-2)] text-[var(--color-muted)]'
+}
+
+/** Badge für den erkannten Website-Zustand (leer/geparkt/… vs. vorhanden). */
+function WebsiteStateBadge({ state, manual }: { state: WebsiteState; manual?: boolean }) {
+  return (
+    <span className={cls('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', WS_TONE_CLS[WEBSITE_STATE_TONE[state]])}
+      title={manual ? 'Manuell festgelegter Zustand' : 'Automatisch erkannt'}>
+      {WEBSITE_STATE_LABELS[state]}{manual && <Pencil size={8} />}
+    </span>
+  )
+}
 
 const PRIO_TONE: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = { A: 'success', B: 'info', C: 'warning', D: 'neutral' }
 const CONTACT: Record<string, { label: string; tone: 'success' | 'warning' | 'error' }> = {
@@ -243,6 +261,7 @@ function FindenTab({ onDone }: { onDone: () => void }) {
 function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' | 'nachrecherche' | 'gespeichert' | 'ausschluss'; onDetail: (c: Company) => void; selectedId?: string | null }) {
   const [rows, setRows] = useState<Company[]>([])
   const [stats, setStats] = useState<Record<string, number> | null>(null)
+  const [hideEmpty, setHideEmpty] = useState(false) // leere/geparkte Websites ausblenden (§14)
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<LeadStatus | ''>('')
   const [sort, setSort] = useState('prio')
@@ -302,6 +321,10 @@ function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' |
     load()
   }
   const showList = scope === 'ergebnisse' || scope === 'nachrecherche'
+  // „Leere Websites ausblenden" (§14): geparkte/leere/Platzhalter-Seiten filtern — Unternehmen
+  // OHNE Website bleiben sichtbar (die sind potenziell interessant, §27).
+  const displayRows = hideEmpty ? rows.filter((c) => !EMPTY_WEBSITE_STATES.includes((c.websiteState || '') as WebsiteState)) : rows
+  const emptyCount = rows.filter((c) => EMPTY_WEBSITE_STATES.includes((c.websiteState || '') as WebsiteState)).length
 
   return (
     <div className="space-y-3">
@@ -339,6 +362,16 @@ function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' |
         <select value={sort} onChange={(e) => setSort(e.target.value)} className="inp h-10 w-56" aria-label="Sortierung">
           {SORT_OPTS.map(([k, v]) => <option key={k} value={k}>Sortieren: {v}</option>)}
         </select>
+        {emptyCount > 0 && (
+          <button
+            onClick={() => setHideEmpty((v) => !v)}
+            aria-pressed={hideEmpty}
+            className={cls('inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm transition-colors', hideEmpty ? 'bg-[var(--color-ink)] text-white' : 'btn-ghost')}
+            title="Leere, geparkte und Platzhalter-Websites ausblenden. Unternehmen ohne Website bleiben sichtbar."
+          >
+            <Ban size={14} /> Leere Websites ausblenden{hideEmpty ? '' : ` (${emptyCount})`}
+          </button>
+        )}
         <a href={`/api/kundenfinder/export?${scope === 'gespeichert' ? 'savedOnly=1&' : ''}${showList ? 'contact=' + (scope === 'ergebnisse' ? 'vollstaendig' : 'unvollstaendig') + '&' : ''}${q ? 'q=' + encodeURIComponent(q) : ''}`} className="btn-ghost inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm"><Download size={14} /> CSV-Export</a>
       </div>
 
@@ -398,7 +431,7 @@ function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' |
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => {
+              {displayRows.map((c) => {
                 const cc = c.contactCompleteness ? CONTACT[c.contactCompleteness] : null
                 const active = c.id === selectedId
                 return (
@@ -448,7 +481,10 @@ function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' |
                         {!c.phone && !c.email && <span className="text-red-500">keine</span>}
                       </div>
                     </td>
-                    <td className="p-3 text-xs" onClick={(e) => e.stopPropagation()}>{c.website ? <a href={c.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--color-gold)] hover:underline"><Globe size={11} /> {c.domainNorm || 'öffnen'}</a> : <span className="text-red-500">keine Website</span>}</td>
+                    <td className="p-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                      {c.website ? <a href={c.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--color-gold)] hover:underline"><Globe size={11} /> {c.domainNorm || 'öffnen'}</a> : <span className="text-[var(--color-muted)]">keine Website</span>}
+                      {c.websiteState && <div className="mt-1"><WebsiteStateBadge state={c.websiteState as WebsiteState} manual={!!c.websiteStateManual} /></div>}
+                    </td>
                     <td className="p-3"><ScoreBadge value={c.websiteScore} direction="low" /></td>
                     <td className="p-3 align-top"><div className="line-clamp-3 max-w-[190px] text-xs text-[var(--color-ink-soft)]" title={c.aiWebsiteNote || ''}>{c.aiWebsiteNote || <span className="text-[var(--color-muted)]">—</span>}</div></td>
                     <td className="p-3" title={c.acquisitionReason || ''}>{c.acquisitionPriority ? <StatusBadge label={c.acquisitionPriority} tone={PRIO_TONE[c.acquisitionPriority]} /> : '—'}</td>
@@ -691,6 +727,31 @@ function DetailDrawer({ id, onClose }: { id: string; onClose: () => void }) {
           {c.email && <a href={`mailto:${c.email}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-[32px] items-center gap-1 hover:text-[var(--color-gold)]" title={`E-Mail an ${c.email}`}><Mail size={13} /> {c.email}</a>}
           {c.website && <a href={c.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--color-gold)] hover:underline"><Globe size={13} /> {c.domainNorm}</a>}
           {(c.lat && c.lng) && <a href={`https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline"><MapPin size={13} /> Karte</a>}
+        </div>
+
+        {/* Website-Zustand + manuelle Korrektur (§13/§15) */}
+        <div className="mb-4 rounded-lg border border-[var(--color-line)] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[var(--color-muted)]">Website-Zustand:</span>
+              {c.websiteState ? <WebsiteStateBadge state={c.websiteState as WebsiteState} manual={!!c.websiteStateManual} /> : <span className="text-xs text-[var(--color-muted)]">noch nicht geprüft</span>}
+            </div>
+            <label className="flex items-center gap-1.5 text-xs">
+              <span className="text-[var(--color-muted)]">Manuell korrigieren:</span>
+              <select
+                value={c.websiteStateManual || ''}
+                onChange={async (e) => { await fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'website_state', id, websiteState: e.target.value || null }) }); load() }}
+                className="inp h-8 text-xs"
+              >
+                <option value="">— automatisch —</option>
+                {(['vorhanden', 'schlecht', 'einfach', 'leer', 'platzhalter', 'geparkt', 'coming_soon', 'baustelle', 'wartung', 'fehlerseite', 'nur_social', 'nicht_erreichbar', 'keine', 'pruefung'] as WebsiteState[]).map((s) => (
+                  <option key={s} value={s}>{WEBSITE_STATE_LABELS[s]}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {c.websiteStateReason && <p className="mt-1.5 text-[11px] text-[var(--color-muted)]">{c.websiteStateReason}</p>}
+          {c.websiteStateManual && <p className="mt-1 text-[11px] text-[var(--color-gold)]">Manuell festgelegt — die automatische Analyse überschreibt diesen Wert nicht.</p>}
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-3">

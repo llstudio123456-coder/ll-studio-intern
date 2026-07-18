@@ -639,11 +639,20 @@ function migrateV2(db: Database.Database) {
   add('ai_note_generated_at', 'TEXT')
   add('ai_note_edited', 'INTEGER DEFAULT 0')
   add('last_activity_at', 'TEXT')
+  // Website-Zustand (leer/geparkt/coming-soon … vs. „keine Website"). Automatisch erkannt +
+  // manuelle Korrektur mit Vorrang (§15). Der manuelle Wert wird von der Auto-Analyse NIE
+  // überschrieben.
+  add('website_state', 'TEXT')
+  add('website_state_reason', 'TEXT')
+  add('website_state_manual', 'TEXT')
+  add('website_state_manual_by', 'TEXT')
+  add('website_state_manual_at', 'TEXT')
   db.exec(`
   CREATE INDEX IF NOT EXISTS ix_companies_priority ON companies(acquisition_priority);
   CREATE INDEX IF NOT EXISTS ix_companies_contact ON companies(contact_completeness);
   CREATE INDEX IF NOT EXISTS ix_companies_potential ON companies(website_score);
   CREATE INDEX IF NOT EXISTS ix_companies_lastact ON companies(last_activity_at);
+  CREATE INDEX IF NOT EXISTS ix_companies_webstate ON companies(website_state);
 
   CREATE TABLE IF NOT EXISTS company_activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
