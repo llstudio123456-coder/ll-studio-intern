@@ -12,7 +12,7 @@ import { useToast } from '@/lib/stores/toastStore'
  * - `stopPropagation`: Ein Klick auf die Nummer öffnet NICHT die darüberliegende Kundenkarte
  *   (Spezifikation §8/§22 — sauberes Event-Handling).
  */
-export function PhoneLink({ phone, className = '', showCopy = true }: { phone?: string | null; className?: string; showCopy?: boolean }) {
+export function PhoneLink({ phone, className = '', showCopy = true, onSelect }: { phone?: string | null; className?: string; showCopy?: boolean; onSelect?: () => void }) {
   const toast = useToast((t) => t.show)
   if (!phone) return null
 
@@ -20,6 +20,7 @@ export function PhoneLink({ phone, className = '', showCopy = true }: { phone?: 
   const copy = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
+    onSelect?.() // erst auswählen, dann kopieren
     navigator.clipboard.writeText(phone).then(() => toast('Telefonnummer wurde kopiert.', 'success')).catch(() => {})
   }
 
@@ -37,7 +38,7 @@ export function PhoneLink({ phone, className = '', showCopy = true }: { phone?: 
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <a
         href={href}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onSelect?.() }}
         title={`${phone} anrufen`}
         className="inline-flex min-h-[32px] items-center gap-1 text-[var(--color-ink-soft)] hover:text-[var(--color-gold)]"
       >

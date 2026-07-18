@@ -94,6 +94,10 @@ function KundenfinderInner() {
   // die Liste sich durch eine kleine Aktion neu lädt (Spezifikation §5–7).
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const openDetail = useCallback((c: Company) => { setSelectedId(c.id); setDetail(c) }, [])
+  // Nur auswählen (ohne Detail zu öffnen): für Klicks auf Website-Link, Telefon, E-Mail usw.
+  // innerhalb einer Unternehmenszeile. So wird das Unternehmen markiert, ohne die Detailansicht
+  // aufzureißen — und die Markierung überlebt das Öffnen des externen Links im neuen Tab.
+  const selectCompany = useCallback((c: Company) => setSelectedId(c.id), [])
   const go = useCallback((v: Tab) => router.push(`/kundenfinder?view=${v}`, { scroll: false }), [router])
 
   return (
@@ -103,11 +107,11 @@ function KundenfinderInner() {
 
       {view === 'uebersicht' && <UebersichtTab go={go} />}
       {view === 'finden' && <FindenTab onDone={() => go('ergebnisse')} />}
-      {view === 'ergebnisse' && <CompanyListTab key="erg" scope="ergebnisse" onDetail={openDetail} selectedId={selectedId} />}
-      {view === 'nachrecherche' && <CompanyListTab key="nach" scope="nachrecherche" onDetail={openDetail} selectedId={selectedId} />}
-      {view === 'gespeichert' && <CompanyListTab key="gesp" scope="gespeichert" onDetail={openDetail} selectedId={selectedId} />}
+      {view === 'ergebnisse' && <CompanyListTab key="erg" scope="ergebnisse" onDetail={openDetail} onSelect={selectCompany} selectedId={selectedId} />}
+      {view === 'nachrecherche' && <CompanyListTab key="nach" scope="nachrecherche" onDetail={openDetail} onSelect={selectCompany} selectedId={selectedId} />}
+      {view === 'gespeichert' && <CompanyListTab key="gesp" scope="gespeichert" onDetail={openDetail} onSelect={selectCompany} selectedId={selectedId} />}
       {view === 'pipeline' && <PipelineTab onDetail={openDetail} />}
-      {view === 'ausschluss' && <CompanyListTab key="aus" scope="ausschluss" onDetail={openDetail} selectedId={selectedId} />}
+      {view === 'ausschluss' && <CompanyListTab key="aus" scope="ausschluss" onDetail={openDetail} onSelect={selectCompany} selectedId={selectedId} />}
       {view === 'verlauf' && <VerlaufTab />}
       {view === 'einstellungen' && <EinstellungenTab />}
 
@@ -258,7 +262,7 @@ function FindenTab({ onDone }: { onDone: () => void }) {
 }
 
 /* ─────────── Ergebnis-/Gespeichert-/Ausschluss-Liste ─────────── */
-function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' | 'nachrecherche' | 'gespeichert' | 'ausschluss'; onDetail: (c: Company) => void; selectedId?: string | null }) {
+function CompanyListTab({ scope, onDetail, onSelect, selectedId }: { scope: 'ergebnisse' | 'nachrecherche' | 'gespeichert' | 'ausschluss'; onDetail: (c: Company) => void; onSelect: (c: Company) => void; selectedId?: string | null }) {
   const [rows, setRows] = useState<Company[]>([])
   const [stats, setStats] = useState<Record<string, number> | null>(null)
   const [hideEmpty, setHideEmpty] = useState(false) // leere/geparkte Websites ausblenden (§14)
@@ -474,26 +478,26 @@ function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' |
                       : (c.peopleCount ?? 0) > 0 ? <span className="text-xs text-[var(--color-muted)]">{c.peopleCount} Person(en)</span>
                       : <span className="text-xs text-[var(--color-muted)]">nur allg. Kontakt<br /><span className="text-[10px] text-[var(--color-muted)]/70">nicht recherchiert</span></span>}
                     </td>
-                    <td className="p-3 align-top text-xs" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-3 align-top text-xs" onClick={(e) => { e.stopPropagation(); onSelect(c) }}>
                       <div className="max-w-[170px] space-y-0.5">
-                        {c.phone && <PhoneLink phone={c.phone} className="text-[11px]" />}
+                        {c.phone && <PhoneLink phone={c.phone} className="text-[11px]" onSelect={() => onSelect(c)} />}
                         {c.email && <button onClick={() => copy(c.email!, 'E-Mail')} title={c.email} className="flex w-full items-center gap-1 hover:text-[var(--color-gold)]"><Mail size={11} className="shrink-0" /> <span className="truncate">{c.email}</span></button>}
                         {!c.phone && !c.email && <span className="text-red-500">keine</span>}
                       </div>
                     </td>
-                    <td className="p-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-3 text-xs" onClick={(e) => { e.stopPropagation(); onSelect(c) }}>
                       {c.website ? <a href={c.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--color-gold)] hover:underline"><Globe size={11} /> {c.domainNorm || 'öffnen'}</a> : <span className="text-[var(--color-muted)]">keine Website</span>}
                       {c.websiteState && <div className="mt-1"><WebsiteStateBadge state={c.websiteState as WebsiteState} manual={!!c.websiteStateManual} /></div>}
                     </td>
                     <td className="p-3"><ScoreBadge value={c.websiteScore} direction="low" /></td>
                     <td className="p-3 align-top"><div className="line-clamp-3 max-w-[190px] text-xs text-[var(--color-ink-soft)]" title={c.aiWebsiteNote || ''}>{c.aiWebsiteNote || <span className="text-[var(--color-muted)]">—</span>}</div></td>
                     <td className="p-3" title={c.acquisitionReason || ''}>{c.acquisitionPriority ? <StatusBadge label={c.acquisitionPriority} tone={PRIO_TONE[c.acquisitionPriority]} /> : '—'}</td>
-                    <td className="p-3 align-top" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-3 align-top" onClick={(e) => { e.stopPropagation(); onSelect(c) }}>
                       <select value={c.status} onChange={(e) => updateStatus(c.id, e.target.value as LeadStatus, load)} className="inp h-8 w-36 text-xs">
                         {Object.entries(LEAD_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     </td>
-                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-3" onClick={(e) => { e.stopPropagation(); onSelect(c) }}>
                       <div className="flex items-center justify-end gap-1">
                         {scope !== 'gespeichert' && !c.excluded && <button title="Speichern" onClick={() => setSaveFor(c)} className="btn-icon p-1.5"><Save size={15} className="text-green-600" /></button>}
                         {scope === 'gespeichert' && <button title="Aus gespeicherten Kunden entfernen" aria-label="Aus gespeicherten Kunden entfernen" onClick={() => unsaveWithUndo(c)} className="btn-icon p-1.5"><BookmarkX size={15} className="text-[var(--color-ink-soft)]" /></button>}
