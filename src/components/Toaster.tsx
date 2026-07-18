@@ -6,7 +6,8 @@ import { useToast } from '@/lib/stores/toastStore'
 export function Toaster() {
   const { toasts, dismiss } = useToast()
   return (
-    <div className="pointer-events-none fixed right-4 bottom-4 z-[100] flex flex-col gap-2">
+    // Bottom-Nav auf dem Smartphone nicht verdecken: Abstand nach unten per Safe-Area + Leiste.
+    <div className="pointer-events-none fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[100] flex flex-col gap-2 lg:bottom-4">
       {toasts.map((t) => {
         const icon = t.type === 'error' ? <AlertTriangle size={16} /> : t.type === 'info' ? <Info size={16} /> : <Check size={16} />
         const accent =
@@ -18,7 +19,15 @@ export function Toaster() {
           >
             <span className={accent}>{icon}</span>
             <span className="text-[var(--color-ink)]">{t.message}</span>
-            <button onClick={() => dismiss(t.id)} className="ml-1 text-[var(--color-muted)] hover:text-[var(--color-ink)]">
+            {t.action && (
+              <button
+                onClick={() => { t.action!.onClick(); dismiss(t.id) }}
+                className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-[var(--color-gold)] hover:bg-[var(--color-hover)]"
+              >
+                {t.action.label}
+              </button>
+            )}
+            <button onClick={() => dismiss(t.id)} aria-label="Schließen" className="ml-1 text-[var(--color-muted)] hover:text-[var(--color-ink)]">
               <X size={14} />
             </button>
           </div>

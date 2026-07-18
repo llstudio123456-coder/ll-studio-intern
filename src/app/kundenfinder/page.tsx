@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Search, Save, Ban, ExternalLink, RefreshCw, Upload, Download, X, MapPin, Phone, Mail, Globe, ClipboardList, History as HistoryIcon, Layers, ShieldAlert, Copy, Pencil, Check, PhoneCall, UserSearch, Smartphone, ChevronDown, Star, AlertTriangle, ShieldCheck, SlidersHorizontal, ArrowRight, Info
+  Search, Save, Ban, ExternalLink, RefreshCw, Upload, Download, X, MapPin, Phone, Mail, Globe, ClipboardList, History as HistoryIcon, Layers, ShieldAlert, Copy, Pencil, Check, PhoneCall, UserSearch, Smartphone, ChevronDown, Star, AlertTriangle, ShieldCheck, SlidersHorizontal, ArrowRight, Info, BookmarkX
 } from 'lucide-react'
 import type { Company, LeadStatus, SearchParams, CompanyPerson, PersonContactStatus, DecisionRelevance } from '@shared/kundenfinder'
 import {
@@ -12,6 +12,8 @@ import {
 import { cls } from '@/lib/format'
 import { useToast } from '@/lib/stores/toastStore'
 import { StatusBadge, ScoreBadge, Metric } from '@/components/ui/Ui'
+import { PhoneLink } from '@/components/PhoneLink'
+import { telHref } from '@shared/phone'
 
 const PRIO_TONE: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = { A: 'success', B: 'info', C: 'warning', D: 'neutral' }
 const CONTACT: Record<string, { label: string; tone: 'success' | 'warning' | 'error' }> = {
@@ -281,6 +283,19 @@ function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecher
     load()
   }
   const copy = (text: string, what: string) => { navigator.clipboard.writeText(text).then(() => toast(`${what} kopiert`, 'success')).catch(() => {}) }
+
+  /** Aus gespeicherten Kunden entfernen (nur Speicherstatus) — Bestätigung + Rückgängig. */
+  const unsaveWithUndo = async (c: Company) => {
+    if (!confirm('Möchten Sie dieses Unternehmen wirklich aus den gespeicherten Kunden entfernen?')) return
+    const r = await fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'unsave', id: c.id }) })
+    const d = await r.json().catch(() => null)
+    if (!d?.ok) { toast(d?.error || 'Entfernen nicht möglich.', 'error'); return }
+    toast('Das Unternehmen wurde aus den gespeicherten Kunden entfernt.', 'success', {
+      label: 'Rückgängig',
+      onClick: () => { fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', id: c.id, dialog: {} }) }).then(load) }
+    })
+    load()
+  }
   const showList = scope === 'ergebnisse' || scope === 'nachrecherche'
 
   return (
@@ -409,7 +424,7 @@ function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecher
                     </td>
                     <td className="p-3 align-top text-xs" onClick={(e) => e.stopPropagation()}>
                       <div className="max-w-[170px] space-y-0.5">
-                        {c.phone && <button onClick={() => copy(c.phone!, 'Telefonnummer')} title="Telefonnummer kopieren" className="flex items-center gap-1 hover:text-[var(--color-gold)]"><Phone size={11} className="shrink-0" /> <span className="truncate">{c.phone}</span></button>}
+                        {c.phone && <PhoneLink phone={c.phone} className="text-[11px]" />}
                         {c.email && <button onClick={() => copy(c.email!, 'E-Mail')} title={c.email} className="flex w-full items-center gap-1 hover:text-[var(--color-gold)]"><Mail size={11} className="shrink-0" /> <span className="truncate">{c.email}</span></button>}
                         {!c.phone && !c.email && <span className="text-red-500">keine</span>}
                       </div>
@@ -426,6 +441,7 @@ function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecher
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {scope !== 'gespeichert' && !c.excluded && <button title="Speichern" onClick={() => setSaveFor(c)} className="btn-icon p-1.5"><Save size={15} className="text-green-600" /></button>}
+                        {scope === 'gespeichert' && <button title="Aus gespeicherten Kunden entfernen" aria-label="Aus gespeicherten Kunden entfernen" onClick={() => unsaveWithUndo(c)} className="btn-icon p-1.5"><BookmarkX size={15} className="text-[var(--color-ink-soft)]" /></button>}
                         {!c.excluded && <button title="Nicht geeignet" onClick={() => act('exclude', c.id, { reason: 'nicht geeignet', status: 'nicht_geeignet' })} className="btn-icon p-1.5"><Ban size={15} className="text-red-500" /></button>}
                         <button title="Website erneut prüfen" onClick={() => analyzeCompany(c.id, load)} className="btn-icon p-1.5"><RefreshCw size={15} /></button>
                         {c.website && <a title="Website öffnen" href={c.website} target="_blank" rel="noreferrer" className="btn-icon p-1.5"><ExternalLink size={15} /></a>}
@@ -620,6 +636,22 @@ function DetailDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const logActivity = async (type: string) => { await fetch('/api/kundenfinder/activity', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, type }) }); load() }
   const copy = (t: string, w: string) => navigator.clipboard.writeText(t).then(() => toast(`${w} kopiert`, 'success')).catch(() => {})
 
+  /**
+   * Aus gespeicherten Kunden entfernen — nur der Speicherstatus, keine Datenlöschung.
+   * Mit Bestätigung und Rückgängig-Meldung (setzt bei Bedarf sofort wieder auf gespeichert).
+   */
+  const unsave = async () => {
+    if (!confirm('Möchten Sie dieses Unternehmen wirklich aus den gespeicherten Kunden entfernen?')) return
+    const r = await fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'unsave', id }) })
+    const d = await r.json().catch(() => null)
+    if (!d?.ok) { toast(d?.error || 'Entfernen nicht möglich.', 'error'); return }
+    toast('Das Unternehmen wurde aus den gespeicherten Kunden entfernt.', 'success', {
+      label: 'Rückgängig',
+      onClick: () => { fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', id, dialog: {} }) }).then(load) }
+    })
+    load()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div className="h-full w-full max-w-xl overflow-y-auto bg-[var(--color-paper)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -635,9 +667,9 @@ function DetailDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
         {c.acquisitionReason && <p className="mb-4 text-xs text-[var(--color-muted)]">{c.acquisitionReason}</p>}
 
-        <div className="mb-4 flex flex-wrap gap-3 text-sm">
-          {c.phone && <button onClick={() => copy(c.phone!, 'Telefonnummer')} title="kopieren" className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]"><Phone size={13} /> {c.phone}</button>}
-          {c.email && <button onClick={() => copy(c.email!, 'E-Mail')} title="kopieren" className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]"><Mail size={13} /> {c.email}</button>}
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+          {c.phone && <PhoneLink phone={c.phone} />}
+          {c.email && <a href={`mailto:${c.email}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-[32px] items-center gap-1 hover:text-[var(--color-gold)]" title={`E-Mail an ${c.email}`}><Mail size={13} /> {c.email}</a>}
           {c.website && <a href={c.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--color-gold)] hover:underline"><Globe size={13} /> {c.domainNorm}</a>}
           {(c.lat && c.lng) && <a href={`https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline"><MapPin size={13} /> Karte</a>}
         </div>
@@ -725,9 +757,13 @@ function DetailDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         )}
 
         <div className="mt-6 flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-4">
+          {c.saved && (
+            <button onClick={unsave} className="btn-ghost rounded-lg px-3 py-1.5 text-xs text-[var(--color-ink-soft)]">Aus gespeicherten Kunden entfernen</button>
+          )}
           {!c.excluded && <button onClick={() => fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'exclude', id, reason: 'kein kontakt gewünscht', status: 'kein_kontakt' }) }).then(load)} className="btn-ghost rounded-lg px-3 py-1.5 text-xs text-amber-700">Kein Kontakt gewünscht</button>}
           <button onClick={() => { if (confirm('Unternehmen VOLLSTÄNDIG entfernen (auch aus dem Dubletten-Schutz)? Es kann danach erneut vorgeschlagen werden.')) fetch('/api/kundenfinder/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'remove', id }) }).then(onClose) }} className="btn-ghost rounded-lg px-3 py-1.5 text-xs text-red-600">Vollständig entfernen</button>
         </div>
+        <p className="mt-2 text-[11px] text-[var(--color-muted)]">„Aus gespeicherten Kunden entfernen“ löscht nur den Speicherstatus. Notizen, Verlauf und Pipeline bleiben erhalten. „Vollständig entfernen“ löscht den Datensatz endgültig.</p>
         {EXCLUDING_STATUSES.includes(c.status) && <p className="mt-2 text-[11px] text-amber-700">Dieses Unternehmen ist vom erneuten Vorschlagen ausgeschlossen (Status „{LEAD_STATUS_LABELS[c.status]}“).</p>}
       </div>
     </div>
@@ -842,9 +878,16 @@ function PersonRow({ person, isPreferred, copy, onReload }: { person: CompanyPer
       {(person.contacts?.length ?? 0) > 0 && !blocked && (
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
           {person.contacts!.map((cm) => {
-            if (cm.kind === 'email') return <button key={cm.id} onClick={() => copy(cm.value, 'E-Mail')} className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]" title="E-Mail kopieren"><Mail size={11} /> {cm.value}{cm.isDirect && <span className="text-[9px] text-green-700">direkt</span>}</button>
-            if (cm.isMobile) return <button key={cm.id} onClick={() => copy(cm.value, 'Mobilnummer')} className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]" title={cm.mobileConfidence ? MOBILE_CONFIDENCE_LABELS[cm.mobileConfidence] : 'Mobilnummer'}><Smartphone size={11} /> {cm.value}<span className={cls('h-1.5 w-1.5 rounded-full', cm.mobileConfidence ? MOB_DOT[cm.mobileConfidence] : 'bg-gray-400')} /></button>
-            return <button key={cm.id} onClick={() => copy(cm.value, 'Telefonnummer')} className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]" title={cm.phoneType ? PHONE_TYPE_LABELS[cm.phoneType] : 'Telefon'}><Phone size={11} /> {cm.value}</button>
+            if (cm.kind === 'email') return <a key={cm.id} href={`mailto:${cm.value}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]" title={`E-Mail an ${cm.value}`}><Mail size={11} /> {cm.value}{cm.isDirect && <span className="text-[9px] text-green-700">direkt</span>}</a>
+            // Fax nie als Anruf-Knopf (Spezifikation §20) — nur kopierbar anzeigen.
+            if (cm.kind === 'fax') return <button key={cm.id} onClick={() => copy(cm.value, 'Faxnummer')} className="inline-flex items-center gap-1 text-[var(--color-muted)] hover:text-[var(--color-ink)]" title="Faxnummer kopieren"><Phone size={11} /> {cm.value} <span className="text-[9px]">Fax</span></button>
+            if (cm.isMobile) return (
+              <span key={cm.id} className="inline-flex items-center gap-1" title={cm.mobileConfidence ? MOBILE_CONFIDENCE_LABELS[cm.mobileConfidence] : 'Mobilnummer'}>
+                {telHref(cm.value) ? <a href={telHref(cm.value)!} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 hover:text-[var(--color-gold)]"><Smartphone size={11} /> {cm.value}</a> : <span className="inline-flex items-center gap-1 text-amber-700"><Smartphone size={11} /> {cm.value}</span>}
+                <span className={cls('h-1.5 w-1.5 rounded-full', cm.mobileConfidence ? MOB_DOT[cm.mobileConfidence] : 'bg-gray-400')} />
+              </span>
+            )
+            return <PhoneLink key={cm.id} phone={cm.value} className="text-xs" showCopy={false} />
           })}
         </div>
       )}

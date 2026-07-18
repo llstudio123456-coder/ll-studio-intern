@@ -366,6 +366,18 @@ export function saveCompany(id: string, dialog: Partial<Company>, user = 'system
   return updateCompany(id, dialog, user)
 }
 
+/**
+ * Entfernt AUSSCHLIESSLICH den Speicherstatus („aus gespeicherten Kunden entfernen").
+ *
+ * Bewusst getrennt von removePermanently: Notizen, Kontaktverlauf, Pipeline-Status, Ansprechpartner
+ * und alle sonstigen erfassten Daten bleiben vollständig erhalten. Das Unternehmen taucht danach
+ * weiterhin als normaler Suchtreffer auf, nur nicht mehr unter „Gespeicherte Kunden".
+ */
+export function unsaveCompany(id: string): Company | null {
+  getDb().prepare('UPDATE companies SET saved = 0, updated_at = ? WHERE id = ?').run(now(), id)
+  return getCompany(id)
+}
+
 export function excludeCompany(id: string, reason: string, status: LeadStatus = 'nicht_geeignet', user = 'system'): Company | null {
   const db = getDb()
   const cur = getCompany(id)
