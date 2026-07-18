@@ -71,6 +71,11 @@ function KundenfinderInner() {
   const params = useSearchParams()
   const view = ((params.get('view') as Tab) in VIEW_META ? (params.get('view') as Tab) : 'ergebnisse') as Tab
   const [detail, setDetail] = useState<Company | null>(null)
+  // Ausgewähltes Unternehmen per ID (nicht per Listenindex — der ändert sich durch Sortierung/
+  // Filter). Die Markierung bleibt bestehen, auch wenn die Detailansicht geschlossen wird oder
+  // die Liste sich durch eine kleine Aktion neu lädt (Spezifikation §5–7).
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const openDetail = useCallback((c: Company) => { setSelectedId(c.id); setDetail(c) }, [])
   const go = useCallback((v: Tab) => router.push(`/kundenfinder?view=${v}`, { scroll: false }), [router])
 
   return (
@@ -80,11 +85,11 @@ function KundenfinderInner() {
 
       {view === 'uebersicht' && <UebersichtTab go={go} />}
       {view === 'finden' && <FindenTab onDone={() => go('ergebnisse')} />}
-      {view === 'ergebnisse' && <CompanyListTab key="erg" scope="ergebnisse" onDetail={setDetail} />}
-      {view === 'nachrecherche' && <CompanyListTab key="nach" scope="nachrecherche" onDetail={setDetail} />}
-      {view === 'gespeichert' && <CompanyListTab key="gesp" scope="gespeichert" onDetail={setDetail} />}
-      {view === 'pipeline' && <PipelineTab onDetail={setDetail} />}
-      {view === 'ausschluss' && <CompanyListTab key="aus" scope="ausschluss" onDetail={setDetail} />}
+      {view === 'ergebnisse' && <CompanyListTab key="erg" scope="ergebnisse" onDetail={openDetail} selectedId={selectedId} />}
+      {view === 'nachrecherche' && <CompanyListTab key="nach" scope="nachrecherche" onDetail={openDetail} selectedId={selectedId} />}
+      {view === 'gespeichert' && <CompanyListTab key="gesp" scope="gespeichert" onDetail={openDetail} selectedId={selectedId} />}
+      {view === 'pipeline' && <PipelineTab onDetail={openDetail} />}
+      {view === 'ausschluss' && <CompanyListTab key="aus" scope="ausschluss" onDetail={openDetail} selectedId={selectedId} />}
       {view === 'verlauf' && <VerlaufTab />}
       {view === 'einstellungen' && <EinstellungenTab />}
 
@@ -235,7 +240,7 @@ function FindenTab({ onDone }: { onDone: () => void }) {
 }
 
 /* ─────────── Ergebnis-/Gespeichert-/Ausschluss-Liste ─────────── */
-function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecherche' | 'gespeichert' | 'ausschluss'; onDetail: (c: Company) => void }) {
+function CompanyListTab({ scope, onDetail, selectedId }: { scope: 'ergebnisse' | 'nachrecherche' | 'gespeichert' | 'ausschluss'; onDetail: (c: Company) => void; selectedId?: string | null }) {
   const [rows, setRows] = useState<Company[]>([])
   const [stats, setStats] = useState<Record<string, number> | null>(null)
   const [q, setQ] = useState('')
@@ -395,11 +400,25 @@ function CompanyListTab({ scope, onDetail }: { scope: 'ergebnisse' | 'nachrecher
             <tbody>
               {rows.map((c) => {
                 const cc = c.contactCompleteness ? CONTACT[c.contactCompleteness] : null
+                const active = c.id === selectedId
                 return (
-                  <tr key={c.id} className="cursor-pointer border-b border-[var(--color-line)]/60" onClick={() => onDetail(c)}>
-                    <td className="p-3">
-                      <div className="font-medium hover:underline">{c.name}</div>
-                      <div className="text-xs text-[var(--color-muted)]">{c.industry || '—'}{c.city ? ` · ${c.city}` : ''}{c.contactName ? ` · ${c.contactName}` : ''}</div>
+                  <tr
+                    key={c.id}
+                    aria-selected={active}
+                    className={cls(
+                      'relative cursor-pointer border-b border-[var(--color-line)]/60 transition-colors',
+                      active ? 'bg-[var(--color-gold-soft)]/55' : 'hover:bg-[var(--color-hover)]'
+                    )}
+                    onClick={() => onDetail(c)}
+                  >
+                    <td className="relative p-3">
+                      {/* Aktive Auswahl: farbiger Balken links + Label — nicht nur über Farbe vermittelt. */}
+                      {active && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[3px] bg-[var(--color-gold)]" />}
+                      <div className={cls('font-medium hover:underline', active && 'text-[var(--color-ink)]')}>{c.name}</div>
+                      <div className="text-xs text-[var(--color-muted)]">
+                        {active && <span className="mr-1.5 rounded bg-[var(--color-gold)] px-1 py-0.5 text-[9px] font-semibold text-white align-middle">Ausgewählt</span>}
+                        {c.industry || '—'}{c.city ? ` · ${c.city}` : ''}{c.contactName ? ` · ${c.contactName}` : ''}
+                      </div>
                     </td>
                     <td className="p-3">{cc ? <StatusBadge label={cc.label} tone={cc.tone} /> : <span className="text-xs text-[var(--color-muted)]">—</span>}</td>
                     <td className="p-3 align-top">
